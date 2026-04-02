@@ -1,0 +1,28 @@
+<h1>アーキテクチャ概要</h1>
+<p>Azure + IIS 構成のアーキテクチャ概要を説明します。</p>
+
+<h2>構成図</h2>
+<pre><code>[ クライアントブラウザ ]
+        │ HTTPS
+        ▼
+[ Azure Application Gateway / Front Door ]  ← SSL 終端・ロードバランサー
+        │ HTTP / HTTPS
+        ▼
+[ Azure VM / App Service (Windows) ]
+  └── IIS 10.0
+        ├── Site: www.example.com  → C:\inetpub\wwwroot\myapp
+        └── Site: api.example.com  → C:\inetpub\wwwroot\api
+</code></pre>
+
+<h2>主要コンポーネント</h2>
+<table>
+  <thead>
+    <tr><th>コンポーネント</th><th>役割</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Azure Application Gateway</td><td>SSL 終端、ロードバランシング、WAF</td></tr>
+    <tr><td>Windows Server (IIS)</td><td>Web アプリケーションのホスティング</td></tr>
+    <tr><td>Azure SQL Database</td><td>アプリケーションデータの永続化</td></tr>
+    <tr><td>Azure Blob Storage</td><td>静的ファイル・メディアコンテンツの格納</td></tr>
+  </tbody>
+</table>

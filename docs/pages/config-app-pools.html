@@ -1,0 +1,31 @@
+<h1>アプリケーションプール</h1>
+<p>アプリケーションプールは IIS の重要な概念です。各 Web サイトやアプリケーションを
+独立したプロセスで実行することで、安定性とセキュリティを確保します。</p>
+
+<h2>アプリケーションプールの設定項目</h2>
+<table>
+  <thead>
+    <tr><th>設定項目</th><th>推奨値</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>.NET CLR バージョン</td><td>v4.0 または マネージドコードなし</td><td>使用するフレームワークに合わせる</td></tr>
+    <tr><td>マネージドパイプラインモード</td><td>統合</td><td>新しいアプリケーションには統合モードを使用</td></tr>
+    <tr><td>アイドルタイムアウト</td><td>20分</td><td>未使用時のプロセス停止までの時間</td></tr>
+    <tr><td>定期的な再起動</td><td>1740分（29時間）</td><td>メモリリーク対策の定期再起動</td></tr>
+  </tbody>
+</table>
+
+<h2>PowerShell での管理</h2>
+<pre><code class="language-powershell"># アプリケーションプールの作成
+New-WebAppPool -Name "MyAppPool"
+
+# 設定変更
+Set-ItemProperty IIS:\AppPools\MyAppPool `
+    -Name processModel.idleTimeout -Value "00:20:00"
+
+# 再起動
+Restart-WebAppPool -Name "MyAppPool"
+
+# 状態確認
+Get-WebAppPoolState -Name "MyAppPool"
+</code></pre>

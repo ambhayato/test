@@ -1,0 +1,37 @@
+<h1>SSL/TLS 設定</h1>
+<p>Azure 上の IIS では、SSL/TLS 証明書を使用して通信を暗号化します。</p>
+
+<h2>証明書の取得方法</h2>
+<ul>
+  <li><strong>Azure App Service 証明書</strong> - マネージド証明書（推奨）</li>
+  <li><strong>Let's Encrypt</strong> - 無料の自動更新証明書</li>
+  <li><strong>商用 CA</strong> - DigiCert、Sectigo 等</li>
+</ul>
+
+<h2>TLS バージョンの設定</h2>
+<pre><code class="language-powershell"># TLS 1.2 を有効化（レジストリ設定）
+$path = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols"
+
+# TLS 1.2 Server の有効化
+New-Item "$path\TLS 1.2\Server" -Force
+New-ItemProperty -Path "$path\TLS 1.2\Server" `
+    -Name "Enabled" -Value 1 -PropertyType DWORD -Force
+New-ItemProperty -Path "$path\TLS 1.2\Server" `
+    -Name "DisabledByDefault" -Value 0 -PropertyType DWORD -Force
+
+# TLS 1.0, 1.1 の無効化（セキュリティ強化）
+New-Item "$path\TLS 1.0\Server" -Force
+New-ItemProperty -Path "$path\TLS 1.0\Server" `
+    -Name "Enabled" -Value 0 -PropertyType DWORD -Force
+</code></pre>
+
+<blockquote>
+  <p><strong>Warning:</strong> TLS 1.0/1.1 を無効化する前に、クライアントの互換性を必ず確認してください。</p>
+</blockquote>
+
+<h2>証明書のインポート</h2>
+<pre><code class="language-powershell"># PFX ファイルから証明書をインポート
+Import-PfxCertificate -FilePath "C:\certs\mycert.pfx" `
+    -CertStoreLocation Cert:\LocalMachine\My `
+    -Password (ConvertTo-SecureString -String "password" -AsPlainText -Force)
+</code></pre>

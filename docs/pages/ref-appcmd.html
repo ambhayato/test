@@ -1,0 +1,58 @@
+<h1>IIS コマンドライン (appcmd)</h1>
+<p><code>appcmd.exe</code> は IIS の設定をコマンドラインから管理するツールです。
+<code>C:\Windows\System32\inetsrv\appcmd.exe</code> に配置されています。</p>
+
+<h2>主要コマンド</h2>
+<pre><code class="language-cmd">:: サイト一覧の表示
+appcmd list site
+
+:: アプリプール一覧の表示
+appcmd list apppool
+
+:: サイトの作成
+appcmd add site /name:MySite /physicalPath:C:\inetpub\wwwroot\mysite /bindings:http/*:80:
+
+:: アプリプールの作成
+appcmd add apppool /name:MyPool /managedRuntimeVersion:v4.0
+
+:: サイトの開始・停止
+appcmd start site /site.name:MySite
+appcmd stop site /site.name:MySite
+
+:: アプリプールの再起動
+appcmd recycle apppool /apppool.name:MyPool
+
+:: ワーカープロセスの一覧
+appcmd list wp
+</code></pre>
+
+<h2>PowerShell WebAdministration モジュール</h2>
+<pre><code class="language-powershell"># モジュールのインポート
+Import-Module WebAdministration
+
+# IIS ドライブへのアクセス
+Get-ChildItem IIS:\Sites
+Get-ChildItem IIS:\AppPools
+
+# サイト情報の取得
+Get-Website -Name "Default Web Site"
+
+# バインディングの取得
+Get-WebBinding -Name "MySite"
+
+# サイトの開始・停止
+Start-Website -Name "MySite"
+Stop-Website -Name "MySite"
+</code></pre>
+
+<h2>iisreset コマンド</h2>
+<pre><code class="language-cmd">:: IIS の完全再起動（全サイトに影響するため注意）
+iisreset
+
+:: IIS サービスの停止・起動
+iisreset /stop
+iisreset /start
+
+:: 再起動状態の確認
+iisreset /status
+</code></pre>

@@ -1,0 +1,28 @@
+<h1>バインディング設定</h1>
+<p>バインディングは、IIS サイトがどの IP アドレス・ポート・ホスト名でリクエストを
+受け付けるかを定義します。</p>
+
+<h2>バインディングの追加（PowerShell）</h2>
+<pre><code class="language-powershell"># HTTP バインディング追加
+New-WebBinding -Name "MySite" -Protocol "http" -Port 80 -HostHeader "www.example.com"
+
+# HTTPS バインディング追加
+New-WebBinding -Name "MySite" -Protocol "https" -Port 443 -HostHeader "www.example.com"
+
+# SSL 証明書の割り当て
+$cert = Get-ChildItem Cert:\LocalMachine\My |
+    Where-Object { $_.Subject -like "*example.com*" }
+$binding = Get-WebBinding -Name "MySite" -Protocol "https"
+$binding.AddSslCertificate($cert.Thumbprint, "My")
+</code></pre>
+
+<h2>ホストヘッダーによる複数サイトの運用</h2>
+<p>1つの IP アドレスで複数のドメインをホストする場合、ホストヘッダーを使用します。</p>
+<pre><code>サイト A: www.example.com   → ポート 443
+サイト B: api.example.com   → ポート 443
+サイト C: admin.example.com → ポート 443
+</code></pre>
+
+<h2>SNI（Server Name Indication）の利用</h2>
+<p>IIS 8.0 以降では SNI を使用することで、1つの IP アドレスに複数の SSL 証明書を
+割り当てることができます。</p>

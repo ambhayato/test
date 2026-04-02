@@ -1,0 +1,35 @@
+<h1>web.config の基本</h1>
+<p><code>web.config</code> は IIS Web アプリケーションの設定ファイルです。
+アプリケーションのルートディレクトリに配置します。</p>
+
+<h2>基本構造</h2>
+<pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;configuration&gt;
+  &lt;system.web&gt;
+    &lt;!-- ASP.NET 設定 --&gt;
+    &lt;compilation debug="false" targetFramework="4.8" /&gt;
+    &lt;httpRuntime targetFramework="4.8" maxRequestLength="4096" /&gt;
+  &lt;/system.web&gt;
+
+  &lt;system.webServer&gt;
+    &lt;!-- IIS 設定 --&gt;
+    &lt;defaultDocument&gt;
+      &lt;files&gt;
+        &lt;add value="index.html" /&gt;
+      &lt;/files&gt;
+    &lt;/defaultDocument&gt;
+  &lt;/system.webServer&gt;
+&lt;/configuration&gt;
+</code></pre>
+
+<h2>主要な設定セクション</h2>
+<ul>
+  <li><code>&lt;system.web&gt;</code> - ASP.NET アプリケーション設定</li>
+  <li><code>&lt;system.webServer&gt;</code> - IIS 固有の設定</li>
+  <li><code>&lt;appSettings&gt;</code> - アプリケーション固有のキー/値設定</li>
+  <li><code>&lt;connectionStrings&gt;</code> - データベース接続文字列</li>
+</ul>
+
+<h2>設定の継承</h2>
+<p><code>web.config</code> は階層構造を持ちます。サブディレクトリに配置した設定は
+親ディレクトリの設定を継承しつつ上書きできます。</p>

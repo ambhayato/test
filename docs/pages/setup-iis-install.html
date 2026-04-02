@@ -1,0 +1,31 @@
+<h1>IIS のインストール</h1>
+<p>Windows Server に IIS をインストールする手順を説明します。</p>
+
+<h2>サーバーマネージャーを使用する方法</h2>
+<ol>
+  <li>サーバーマネージャーを開く</li>
+  <li>[役割と機能の追加] をクリック</li>
+  <li>[役割ベースまたは機能ベースのインストール] を選択</li>
+  <li>[Web サーバー (IIS)] にチェックを入れる</li>
+  <li>必要な役割サービスを選択してインストール</li>
+</ol>
+
+<h2>PowerShell を使用する方法</h2>
+<pre><code class="language-powershell"># IIS と管理ツールをインストール
+Install-WindowsFeature -Name Web-Server -IncludeManagementTools
+
+# 追加機能のインストール（例: ASP.NET 4.8）
+Install-WindowsFeature -Name Web-Asp-Net45
+
+# インストール確認
+Get-WindowsFeature | Where-Object {
+    $_.InstallState -eq "Installed" -and $_.Name -like "Web-*"
+}
+</code></pre>
+
+<h2>インストール後の確認</h2>
+<p>ブラウザで <code>http://localhost</code> にアクセスし、IIS のデフォルトページが表示されれば成功です。</p>
+
+<blockquote>
+  <p><strong>Tip:</strong> URL Rewrite モジュールが必要な場合は、Microsoft のダウンロードページから別途インストールしてください。</p>
+</blockquote>

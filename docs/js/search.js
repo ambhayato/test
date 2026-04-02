@@ -2,97 +2,115 @@
  * search.js
  * クライアントサイド全文検索
  *
+ * 各ページの HTML ファイルを fetch() して検索インデックスを構築します。
  * 依存:
  *   - content.js  (MANUAL_CONTENT)
- *   - app.js      (ManualApp.loadPage, ManualApp.getAllPages, ManualApp.getSections)
+ *   - app.js      (ManualApp.loadPage, ManualApp.getAllPages,
+ *                  ManualApp.getSections, ManualApp.getCache)
  */
 
 ;(function () {
   'use strict';
 
   /* ----------------------------------------------------------------
-     検索インデックス（初回ビルド後はキャッシュ）
+     検索インデックス
   ---------------------------------------------------------------- */
-  var searchIndex = null;
+  var searchIndex  = null;   // 構築後: Array<{id, title, sectionLabel, text}>
+  var indexReady   = false;
+  var indexPending = false;
 
-  /**
-   * HTML タグを除去してプレーンテキストに変換
-   * @param {string} html
-   * @returns {string}
-   */
+  /** HTML タグを除去してプレーンテキストに変換 */
   function stripHtml(html) {
     return html
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g,  '&')
+      .replace(/&lt;/g,   '<')
+      .replace(/&gt;/g,   '>')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
+      .replace(/&#39;/g,  "'")
       .replace(/&nbsp;/g, ' ')
-      .replace(/\s+/g, ' ')
+      .replace(/\s+/g,    ' ')
       .trim();
   }
 
   /**
-   * 検索インデックスを構築する（遅延ビルド）
-   * @returns {Array<{id, title, sectionLabel, text}>}
+   * 全ページを並列 fetch してインデックスを構築する。
+   * キャッシュ済みの HTML（ManualApp.getCache()）があれば再利用。
    */
   function buildIndex() {
-    if (searchIndex) return searchIndex;
-    var sections = ManualApp.getSections();
+    if (indexReady || indexPending) return;
+    indexPending = true;
+
+    var sections  = ManualApp.getSections();
     var sectionMap = {};
     sections.forEach(function (s) { sectionMap[s.id] = s.label; });
 
-    searchIndex = MANUAL_CONTENT.map(function (page) {
-      return {
-        id:           page.id,
-        title:        page.title,
-        sectionLabel: sectionMap[page.section] || '',
-        text:         stripHtml(page.content).toLowerCase()
-      };
+    var pages = ManualApp.getAllPages();
+    var cache = ManualApp.getCache();
+
+    var fetchAll = pages.map(function (page) {
+      // キャッシュ済みならそのまま使用
+      if (cache[page.id]) {
+        return Promise.resolve({ id: page.id, html: cache[page.id] });
+      }
+      return fetch('pages/' + page.id + '.html')
+        .then(function (res) {
+          return res.ok ? res.text() : '';
+        })
+        .then(function (html) {
+          return { id: page.id, html: html };
+        })
+        .catch(function () {
+          return { id: page.id, html: '' };
+        });
     });
-    return searchIndex;
+
+    Promise.all(fetchAll).then(function (results) {
+      searchIndex = results.map(function (r) {
+        var page = pages.find(function (p) { return p.id === r.id; });
+        return {
+          id:           r.id,
+          title:        page ? page.title : r.id,
+          sectionLabel: page ? (sectionMap[page.section] || '') : '',
+          text:         stripHtml(r.html).toLowerCase()
+        };
+      });
+      indexReady = true;
+    });
   }
 
   /* ----------------------------------------------------------------
      スコアリング検索
   ---------------------------------------------------------------- */
   /**
-   * クエリ文字列でページを検索し、スコア順に返す
    * @param {string} query
-   * @returns {Array<{page, score, snippet}>}
+   * @returns {Array<{id, title, sectionLabel, score, snippet}>}
    */
   function search(query) {
     var q = query.trim().toLowerCase();
-    if (!q) return [];
+    if (!q || !indexReady) return [];
 
     var tokens = q.split(/\s+/).filter(Boolean);
-    var index = buildIndex();
     var results = [];
 
-    index.forEach(function (entry) {
+    searchIndex.forEach(function (entry) {
       var titleLower = entry.title.toLowerCase();
       var score = 0;
 
       tokens.forEach(function (token) {
-        // タイトル完全一致
-        if (titleLower === token)               score += 10;
-        // タイトル前方一致
-        else if (titleLower.startsWith(token))  score += 7;
-        // タイトル部分一致
-        else if (titleLower.includes(token))    score += 5;
+        if (titleLower === token)              score += 10;
+        else if (titleLower.startsWith(token)) score += 7;
+        else if (titleLower.includes(token))   score += 5;
 
-        // 本文出現回数（1回につき+1、最大10）
-        var bodyCount = 0;
-        var pos = 0;
+        var count = 0, pos = 0;
         while ((pos = entry.text.indexOf(token, pos)) !== -1) {
-          bodyCount++;
+          count++;
           pos += token.length;
-          if (bodyCount >= 10) break;
+          if (count >= 10) break;
         }
-        score += bodyCount;
+        score += count;
       });
 
       if (score > 0) {
@@ -106,47 +124,34 @@
       }
     });
 
-    return results
-      .sort(function (a, b) { return b.score - a.score; })
-      .slice(0, 10);
+    return results.sort(function (a, b) { return b.score - a.score; }).slice(0, 10);
   }
 
   /**
-   * 本文から検索語を含むスニペットを生成（~100文字）
-   * @param {string} text プレーンテキスト（小文字）
-   * @param {string[]} tokens
-   * @returns {string} HTML（<mark> タグ付き）
+   * マッチ箇所周辺のスニペットを生成（~100文字、<mark> タグ付き）
    */
   function makeSnippet(text, tokens) {
     var SNIPPET_LEN = 100;
     var bestPos = -1;
-
-    // 最初にヒットしたトークンの位置を探す
     tokens.forEach(function (token) {
       var pos = text.indexOf(token);
-      if (pos !== -1 && (bestPos === -1 || pos < bestPos)) {
-        bestPos = pos;
-      }
+      if (pos !== -1 && (bestPos === -1 || pos < bestPos)) bestPos = pos;
     });
-
     if (bestPos === -1) return '';
 
-    var start = Math.max(0, bestPos - 20);
-    var end   = Math.min(text.length, start + SNIPPET_LEN);
+    var start   = Math.max(0, bestPos - 20);
+    var end     = Math.min(text.length, start + SNIPPET_LEN);
     var snippet = (start > 0 ? '…' : '') +
                   text.slice(start, end) +
                   (end < text.length ? '…' : '');
 
-    // マッチ箇所に <mark> を付与
     tokens.forEach(function (token) {
       var regex = new RegExp('(' + escapeRegex(token) + ')', 'gi');
       snippet = snippet.replace(regex, '<mark>$1</mark>');
     });
-
     return snippet;
   }
 
-  /** RegExp 用エスケープ */
   function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
@@ -155,22 +160,22 @@
      UI の更新
   ---------------------------------------------------------------- */
   var resultsEl = null;
+  var focusedIdx = -1;
 
-  /**
-   * 検索結果ドロップダウンを描画する
-   * @param {Array} results
-   * @param {string} query
-   */
   function renderResults(results, query) {
     if (!resultsEl) return;
-
-    if (!query.trim()) {
-      closeResults();
-      return;
-    }
+    if (!query.trim()) { closeResults(); return; }
 
     resultsEl.innerHTML = '';
     resultsEl.classList.add('open');
+
+    if (!indexReady) {
+      var loading = document.createElement('div');
+      loading.className = 'search-empty';
+      loading.textContent = '検索インデックスを準備中です...';
+      resultsEl.appendChild(loading);
+      return;
+    }
 
     if (results.length === 0) {
       var empty = document.createElement('div');
@@ -180,14 +185,11 @@
       return;
     }
 
-    var focusedIdx = -1;
-
-    results.forEach(function (result, idx) {
+    focusedIdx = -1;
+    results.forEach(function (result) {
       var item = document.createElement('div');
       item.className = 'search-result-item';
       item.setAttribute('role', 'option');
-      item.setAttribute('tabindex', '-1');
-      item.setAttribute('data-idx', idx);
 
       var titleEl = document.createElement('div');
       titleEl.className = 'search-result-title';
@@ -203,15 +205,11 @@
       if (result.snippet) {
         var snippetEl = document.createElement('div');
         snippetEl.className = 'search-result-snippet';
-        snippetEl.innerHTML = result.snippet;  // <mark> を含む
+        snippetEl.innerHTML = result.snippet;
         item.appendChild(snippetEl);
       }
 
-      item.addEventListener('mousedown', function (e) {
-        // mousedown でフォーカスが外れてドロップダウンが閉じないように
-        e.preventDefault();
-      });
-
+      item.addEventListener('mousedown', function (e) { e.preventDefault(); });
       item.addEventListener('click', function () {
         ManualApp.loadPage(result.id);
         closeResults();
@@ -221,9 +219,6 @@
 
       resultsEl.appendChild(item);
     });
-
-    // キーボード操作のため items を返す
-    return resultsEl.querySelectorAll('.search-result-item');
   }
 
   function closeResults() {
@@ -231,6 +226,14 @@
       resultsEl.classList.remove('open');
       resultsEl.innerHTML = '';
     }
+    focusedIdx = -1;
+  }
+
+  function updateFocus(items, idx) {
+    items.forEach(function (item, i) {
+      item.classList.toggle('focused', i === idx);
+    });
+    if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
   }
 
   /* ----------------------------------------------------------------
@@ -240,8 +243,7 @@
     var timer;
     return function () {
       clearTimeout(timer);
-      var args = arguments;
-      var ctx  = this;
+      var args = arguments, ctx = this;
       timer = setTimeout(function () { fn.apply(ctx, args); }, delay);
     };
   }
@@ -254,38 +256,19 @@
     resultsEl = document.querySelector('#search-results');
     if (!input || !resultsEl) return;
 
-    // インデックスをアイドル時間に先読み
-    if (window.requestIdleCallback) {
-      requestIdleCallback(function () { buildIndex(); });
-    } else {
-      setTimeout(function () { buildIndex(); }, 500);
-    }
-
-    var currentItems = null;
-    var focusedIdx   = -1;
-
     var doSearch = debounce(function (query) {
       var results = search(query);
-      currentItems = renderResults(results, query);
-      focusedIdx = -1;
+      renderResults(results, query);
     }, 150);
 
-    // 入力イベント
-    input.addEventListener('input', function () {
-      doSearch(input.value);
-    });
+    input.addEventListener('input', function () { doSearch(input.value); });
 
-    // フォーカス時: 入力値があれば再表示
     input.addEventListener('focus', function () {
-      if (input.value.trim()) {
-        doSearch(input.value);
-      }
+      if (input.value.trim()) doSearch(input.value);
     });
 
-    // キーボードナビゲーション
     input.addEventListener('keydown', function (e) {
       if (!resultsEl.classList.contains('open')) return;
-
       var items = resultsEl.querySelectorAll('.search-result-item');
       if (!items.length) return;
 
@@ -293,43 +276,23 @@
         e.preventDefault();
         focusedIdx = (focusedIdx + 1) % items.length;
         updateFocus(items, focusedIdx);
-
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         focusedIdx = (focusedIdx - 1 + items.length) % items.length;
         updateFocus(items, focusedIdx);
-
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (focusedIdx >= 0 && items[focusedIdx]) {
-          items[focusedIdx].click();
-        }
-
+        if (focusedIdx >= 0 && items[focusedIdx]) items[focusedIdx].click();
       } else if (e.key === 'Escape') {
         closeResults();
         input.blur();
       }
     });
 
-    // 外側クリックで閉じる
     document.addEventListener('click', function (e) {
       var wrapper = document.querySelector('.search-wrapper');
-      if (wrapper && !wrapper.contains(e.target)) {
-        closeResults();
-      }
+      if (wrapper && !wrapper.contains(e.target)) closeResults();
     });
-  }
-
-  /**
-   * キーボードフォーカスの視覚更新
-   */
-  function updateFocus(items, idx) {
-    items.forEach(function (item, i) {
-      item.classList.toggle('focused', i === idx);
-    });
-    if (items[idx]) {
-      items[idx].scrollIntoView({ block: 'nearest' });
-    }
   }
 
   /* ----------------------------------------------------------------
@@ -337,6 +300,12 @@
   ---------------------------------------------------------------- */
   document.addEventListener('DOMContentLoaded', function () {
     initSearch();
+    // アイドル時間に検索インデックスを先読み
+    if (window.requestIdleCallback) {
+      requestIdleCallback(function () { buildIndex(); }, { timeout: 3000 });
+    } else {
+      setTimeout(function () { buildIndex(); }, 1000);
+    }
   });
 
 })();

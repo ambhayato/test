@@ -1,0 +1,31 @@
+<h1>認証設定</h1>
+<p>IIS では複数の認証方式をサポートしています。用途に応じて適切な方式を選択します。</p>
+
+<h2>認証方式の比較</h2>
+<table>
+  <thead>
+    <tr><th>認証方式</th><th>用途</th><th>セキュリティ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>匿名認証</td><td>公開 Web サイト</td><td>なし</td></tr>
+    <tr><td>基本認証</td><td>シンプルな保護（HTTPS 必須）</td><td>低〜中</td></tr>
+    <tr><td>Windows 認証</td><td>社内イントラネット</td><td>高</td></tr>
+    <tr><td>フォーム認証</td><td>ASP.NET アプリケーション</td><td>中〜高</td></tr>
+    <tr><td>Azure AD / OIDC</td><td>クラウド・モダンアプリ</td><td>高</td></tr>
+  </tbody>
+</table>
+
+<h2>Windows 認証の有効化</h2>
+<pre><code class="language-powershell"># Windows 認証の有効化
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-WindowsAuthentication
+
+# 匿名認証の無効化
+Set-WebConfigurationProperty `
+    -Filter "/system.webServer/security/authentication/anonymousAuthentication" `
+    -Name "enabled" -Value "False" -PSPath "IIS:\" -Location "MySite"
+
+# Windows 認証の有効化
+Set-WebConfigurationProperty `
+    -Filter "/system.webServer/security/authentication/windowsAuthentication" `
+    -Name "enabled" -Value "True" -PSPath "IIS:\" -Location "MySite"
+</code></pre>

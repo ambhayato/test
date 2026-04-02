@@ -1,0 +1,41 @@
+<h1>Azure VM + IIS</h1>
+<p>Azure 仮想マシン上に IIS を構築する方法です。
+より細かい設定が必要な場合や、既存の IIS 構成を移行する際に使用します。</p>
+
+<h2>VM の作成（Azure CLI）</h2>
+<pre><code class="language-bash"># Windows Server 2022 VM の作成
+az vm create \
+  --resource-group myResourceGroup \
+  --name myIISVM \
+  --image Win2022AzureEditionCore \
+  --admin-username azureuser \
+  --admin-password "YourSecurePassword123!" \
+  --size Standard_B2s
+
+# HTTP/HTTPS ポートの開放
+az vm open-port --resource-group myResourceGroup --name myIISVM --port 80
+az vm open-port --resource-group myResourceGroup --name myIISVM --port 443 --priority 901
+</code></pre>
+
+<h2>IIS のリモートインストール</h2>
+<pre><code class="language-bash"># カスタムスクリプト拡張機能を使用した IIS インストール
+az vm extension set \
+  --resource-group myResourceGroup \
+  --vm-name myIISVM \
+  --name CustomScriptExtension \
+  --publisher Microsoft.Compute \
+  --settings '{"commandToExecute":"powershell Add-WindowsFeature Web-Server -IncludeManagementTools"}'
+</code></pre>
+
+<h2>App Service との比較</h2>
+<table>
+  <thead>
+    <tr><th>項目</th><th>Azure VM + IIS</th><th>Azure App Service</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>管理負荷</td><td>高（OS パッチ等が必要）</td><td>低（マネージド）</td></tr>
+    <tr><td>カスタマイズ性</td><td>高（OS レベルまで）</td><td>中（IIS レベルまで）</td></tr>
+    <tr><td>コスト</td><td>中〜高</td><td>低〜中</td></tr>
+    <tr><td>スケーリング</td><td>手動または VMSS</td><td>自動スケール対応</td></tr>
+  </tbody>
+</table>

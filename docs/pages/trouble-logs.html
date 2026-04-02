@@ -1,0 +1,42 @@
+<h1>IIS ログの確認</h1>
+<p>問題発生時はまず IIS ログを確認します。デフォルトのログ保存場所は
+<code>C:\inetpub\logs\LogFiles</code> です。</p>
+
+<h2>ログファイルの形式（W3C 形式）</h2>
+<pre><code>#Software: Microsoft Internet Information Services 10.0
+#Version: 1.0
+#Date: 2024-01-15 00:00:00
+#Fields: date time c-ip cs-method cs-uri-stem cs-uri-query sc-status time-taken
+
+2024-01-15 09:23:45 192.168.1.100 GET /index.html - 200 45
+2024-01-15 09:23:46 192.168.1.100 GET /api/data   - 500 1203
+</code></pre>
+
+<h2>ログフィールドの説明</h2>
+<table>
+  <thead>
+    <tr><th>フィールド</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>date / time</td><td>リクエスト日時（UTC）</td></tr>
+    <tr><td>c-ip</td><td>クライアント IP アドレス</td></tr>
+    <tr><td>cs-method</td><td>HTTP メソッド（GET, POST 等）</td></tr>
+    <tr><td>cs-uri-stem</td><td>リクエストパス</td></tr>
+    <tr><td>sc-status</td><td>HTTP ステータスコード</td></tr>
+    <tr><td>time-taken</td><td>処理時間（ミリ秒）</td></tr>
+  </tbody>
+</table>
+
+<h2>PowerShell でのログ分析</h2>
+<pre><code class="language-powershell"># 500 エラーの抽出
+Get-Content "C:\inetpub\logs\LogFiles\W3SVC1\u_ex240115.log" |
+    Where-Object { $_ -match " 500 " } |
+    Select-Object -Last 20
+
+# 処理時間が長いリクエストを抽出（3秒以上）
+Import-Csv "C:\inetpub\logs\LogFiles\W3SVC1\u_ex240115.log" `
+    -Delimiter " " -Header "date","time","c-ip","cs-method","cs-uri-stem","sc-status","time-taken" |
+    Where-Object { [int]$_."time-taken" -gt 3000 } |
+    Sort-Object "time-taken" -Descending |
+    Select-Object -First 10
+</code></pre>

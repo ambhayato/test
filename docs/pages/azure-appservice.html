@@ -1,0 +1,38 @@
+<h1>Azure App Service</h1>
+<p>Azure App Service は、IIS をマネージドサービスとして利用できる PaaS です。
+インフラ管理不要で Web アプリケーションをデプロイできます。</p>
+
+<h2>App Service の作成（Azure CLI）</h2>
+<pre><code class="language-bash"># リソースグループの作成
+az group create --name myResourceGroup --location japaneast
+
+# App Service プランの作成（Windows）
+az appservice plan create \
+  --name myAppServicePlan \
+  --resource-group myResourceGroup \
+  --sku B1 \
+  --is-windows
+
+# Web アプリの作成
+az webapp create \
+  --name myWebApp \
+  --resource-group myResourceGroup \
+  --plan myAppServicePlan \
+  --runtime "DOTNET|6.0"
+</code></pre>
+
+<h2>デプロイ方法</h2>
+<ul>
+  <li><strong>ZIP デプロイ</strong> - シンプルなファイルのアップロード</li>
+  <li><strong>GitHub Actions</strong> - CI/CD パイプライン</li>
+  <li><strong>Azure DevOps</strong> - エンタープライズ CI/CD</li>
+  <li><strong>FTP/FTPS</strong> - レガシー互換</li>
+  <li><strong>Visual Studio 発行</strong> - 開発環境からの直接デプロイ</li>
+</ul>
+
+<h2>ZIP デプロイの例</h2>
+<pre><code class="language-bash">az webapp deployment source config-zip \
+  --resource-group myResourceGroup \
+  --name myWebApp \
+  --src myapp.zip
+</code></pre>

@@ -1,0 +1,38 @@
+<h1>セキュリティヘッダー</h1>
+<p>HTTP レスポンスヘッダーを適切に設定することで、XSS やクリックジャッキング等の
+攻撃を軽減できます。</p>
+
+<h2>推奨セキュリティヘッダー（web.config）</h2>
+<pre><code class="language-xml">&lt;system.webServer&gt;
+  &lt;httpProtocol&gt;
+    &lt;customHeaders&gt;
+      &lt;!-- サーバー情報の隠蔽 --&gt;
+      &lt;remove name="X-Powered-By" /&gt;
+
+      &lt;!-- MIME タイプスニッフィングの防止 --&gt;
+      &lt;add name="X-Content-Type-Options" value="nosniff" /&gt;
+
+      &lt;!-- クリックジャッキング対策 --&gt;
+      &lt;add name="X-Frame-Options" value="SAMEORIGIN" /&gt;
+
+      &lt;!-- XSS フィルター --&gt;
+      &lt;add name="X-XSS-Protection" value="1; mode=block" /&gt;
+
+      &lt;!-- HTTPS 強制（HSTS） --&gt;
+      &lt;add name="Strict-Transport-Security"
+           value="max-age=31536000; includeSubDomains" /&gt;
+
+      &lt;!-- リファラーポリシー --&gt;
+      &lt;add name="Referrer-Policy"
+           value="strict-origin-when-cross-origin" /&gt;
+    &lt;/customHeaders&gt;
+  &lt;/httpProtocol&gt;
+&lt;/system.webServer&gt;
+</code></pre>
+
+<h2>Content-Security-Policy（CSP）</h2>
+<p>CSP はスクリプトインジェクション攻撃を防ぐための強力な仕組みです。
+サイトの構成に合わせてポリシーを定義してください。</p>
+<pre><code class="language-xml">&lt;add name="Content-Security-Policy"
+     value="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" /&gt;
+</code></pre>

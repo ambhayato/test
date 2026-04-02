@@ -1,0 +1,39 @@
+<h1>web.config スキーマリファレンス</h1>
+<p><code>web.config</code> の主要な設定要素の一覧です。</p>
+
+<h2>system.webServer 要素</h2>
+<table>
+  <thead>
+    <tr><th>要素</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>defaultDocument</code></td><td>デフォルトドキュメントの設定</td></tr>
+    <tr><td><code>staticContent</code></td><td>静的コンテンツの MIME タイプ設定</td></tr>
+    <tr><td><code>rewrite</code></td><td>URL 書き換えルール（URL Rewrite モジュール）</td></tr>
+    <tr><td><code>httpProtocol</code></td><td>HTTP プロトコル設定（カスタムヘッダー等）</td></tr>
+    <tr><td><code>security</code></td><td>認証・認可・リクエストフィルタリング</td></tr>
+    <tr><td><code>httpErrors</code></td><td>カスタムエラーページの設定</td></tr>
+    <tr><td><code>httpCompression</code></td><td>コンテンツ圧縮の設定</td></tr>
+    <tr><td><code>urlCompression</code></td><td>URL 圧縮の有効/無効</td></tr>
+    <tr><td><code>modules</code></td><td>HTTP モジュールの追加/削除</td></tr>
+    <tr><td><code>handlers</code></td><td>HTTP ハンドラーの設定</td></tr>
+    <tr><td><code>directoryBrowse</code></td><td>ディレクトリ一覧の有効/無効</td></tr>
+    <tr><td><code>requestFiltering</code></td><td>リクエストフィルタリングの設定</td></tr>
+  </tbody>
+</table>
+
+<h2>system.web 要素</h2>
+<table>
+  <thead>
+    <tr><th>要素</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>compilation</code></td><td>コンパイル設定（debug モード等）</td></tr>
+    <tr><td><code>authentication</code></td><td>フォーム認証・Windows 認証等</td></tr>
+    <tr><td><code>authorization</code></td><td>アクセス制御ルール</td></tr>
+    <tr><td><code>sessionState</code></td><td>セッション管理の設定</td></tr>
+    <tr><td><code>customErrors</code></td><td>カスタムエラーページ（ASP.NET）</td></tr>
+    <tr><td><code>httpRuntime</code></td><td>ランタイム設定（タイムアウト、リクエストサイズ等）</td></tr>
+    <tr><td><code>globalization</code></td><td>文字エンコーディング・カルチャの設定</td></tr>
+  </tbody>
+</table>

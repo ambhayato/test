@@ -1,0 +1,29 @@
+<h1>最初のサイト作成</h1>
+<p>IIS マネージャーを使用して新しい Web サイトを作成する手順です。</p>
+
+<h2>IIS マネージャーでのサイト作成</h2>
+<ol>
+  <li>IIS マネージャー（<code>inetmgr</code>）を開く</li>
+  <li>左ペインでサーバー名を右クリック → [サイトの追加]</li>
+  <li>サイト名、物理パス、バインド情報を入力</li>
+  <li>[OK] をクリック</li>
+</ol>
+
+<h2>コンテンツの配置</h2>
+<pre><code>C:\inetpub\wwwroot\mysite\
+  ├── index.html
+  ├── css\
+  ├── js\
+  └── web.config
+</code></pre>
+
+<h2>動作確認</h2>
+<ol>
+  <li>IIS マネージャーでサイトが「開始」状態になっていることを確認</li>
+  <li>ブラウザで設定したバインドの URL にアクセス</li>
+  <li>コンテンツが表示されれば完了</li>
+</ol>
+
+<blockquote>
+  <p><strong>Tip:</strong> 本番環境では <code>C:\inetpub\wwwroot</code> 以外のドライブにコンテンツを配置することを推奨します。</p>
+</blockquote>

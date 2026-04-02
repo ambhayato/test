@@ -1,0 +1,36 @@
+<h1>失敗したリクエストのトレース（FRT）</h1>
+<p>失敗したリクエストのトレース（Failed Request Tracing）は、
+エラーの詳細な原因調査に役立つ IIS の機能です。</p>
+
+<h2>有効化の手順</h2>
+<ol>
+  <li>IIS マネージャーでサイトを選択</li>
+  <li>[失敗したリクエストのトレース] をダブルクリック</li>
+  <li>[有効] にチェックを入れてパスを指定</li>
+  <li>トレースするルールを追加（例: ステータスコード 500）</li>
+</ol>
+
+<h2>web.config での設定</h2>
+<pre><code class="language-xml">&lt;system.webServer&gt;
+  &lt;tracing&gt;
+    &lt;traceFailedRequests&gt;
+      &lt;add path="*"&gt;
+        &lt;traceAreas&gt;
+          &lt;add provider="ASP" verbosity="Verbose" /&gt;
+          &lt;add provider="ASPNET"
+               areas="Infrastructure,Module,Page,AppServices"
+               verbosity="Verbose" /&gt;
+          &lt;add provider="WWW Server"
+               areas="Authentication,Security,Filter,StaticFile,Cache,RequestNotifications"
+               verbosity="Verbose" /&gt;
+        &lt;/traceAreas&gt;
+        &lt;failureDefinitions statusCodes="400-599" /&gt;
+      &lt;/add&gt;
+    &lt;/traceFailedRequests&gt;
+  &lt;/tracing&gt;
+&lt;/system.webServer&gt;
+</code></pre>
+
+<blockquote>
+  <p><strong>Note:</strong> トレースログはサイズが大きくなるため、問題解決後は無効化することを推奨します。</p>
+</blockquote>

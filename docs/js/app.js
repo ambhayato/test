@@ -2,6 +2,7 @@
  * app.js
  * TOC レンダリング・ページルーティング・ナビゲーション
  *
+ * 各ページのコンテンツは docs/pages/<id>.html から fetch() で読み込みます。
  * 依存: content.js (MANUAL_CONTENT が定義済みであること)
  */
 
@@ -22,7 +23,7 @@
   })();
 
   /* ----------------------------------------------------------------
-     ページのフラットリスト（order 順）
+     ページのフラットリスト（セクション順 → order 順）
   ---------------------------------------------------------------- */
   const ALL_PAGES = MANUAL_CONTENT.slice().sort(function (a, b) {
     const secA = SECTIONS.findIndex(function (s) { return s.id === a.section; });
@@ -32,14 +33,25 @@
   });
 
   /* ----------------------------------------------------------------
-     現在表示中のページ ID
+     フェッチキャッシュ（同一ページを複数回取得しない）
   ---------------------------------------------------------------- */
-  let currentPageId = null;
+  const pageCache = {};
 
   /* ----------------------------------------------------------------
      DOM ヘルパー
   ---------------------------------------------------------------- */
   function qs(selector) { return document.querySelector(selector); }
+
+  /* ----------------------------------------------------------------
+     HTML エスケープ
+  ---------------------------------------------------------------- */
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 
   /* ----------------------------------------------------------------
      TOC の構築
@@ -74,16 +86,7 @@
         var expanded = btn.getAttribute('aria-expanded') === 'true';
         btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
         pageList.classList.toggle('open', !expanded);
-        // 状態を sessionStorage に保存
-        try {
-          var openSections = JSON.parse(sessionStorage.getItem('toc-open') || '[]');
-          if (!expanded) {
-            if (!openSections.includes(section.id)) openSections.push(section.id);
-          } else {
-            openSections = openSections.filter(function (id) { return id !== section.id; });
-          }
-          sessionStorage.setItem('toc-open', JSON.stringify(openSections));
-        } catch (e) { /* sessionStorage 無効環境では無視 */ }
+        saveTOCState(section.id, !expanded);
       });
 
       // ページリスト
@@ -101,7 +104,6 @@
         a.addEventListener('click', function (e) {
           e.preventDefault();
           loadPage(page.id);
-          // モバイル: クリック後にサイドバーを閉じる
           if (window.innerWidth <= 768) closeSidebar();
         });
         pageLi.appendChild(a);
@@ -114,23 +116,30 @@
     });
 
     tocNav.appendChild(ul);
-
-    // sessionStorage から開いているセクションを復元
     restoreTOCState();
   }
 
   /* ----------------------------------------------------------------
-     sessionStorage からTOC の開閉状態を復元
+     sessionStorage で TOC の開閉状態を保存・復元
   ---------------------------------------------------------------- */
-  function restoreTOCState() {
-    var openSections;
+  function saveTOCState(sectionId, isOpen) {
     try {
-      openSections = JSON.parse(sessionStorage.getItem('toc-open') || '[]');
-    } catch (e) {
-      openSections = [];
-    }
-    openSections.forEach(function (sectionId) {
-      var btn = qs('[data-section="' + sectionId + '"]');
+      var open = JSON.parse(sessionStorage.getItem('toc-open') || '[]');
+      if (isOpen) {
+        if (!open.includes(sectionId)) open.push(sectionId);
+      } else {
+        open = open.filter(function (id) { return id !== sectionId; });
+      }
+      sessionStorage.setItem('toc-open', JSON.stringify(open));
+    } catch (e) { /* ignore */ }
+  }
+
+  function restoreTOCState() {
+    var open;
+    try { open = JSON.parse(sessionStorage.getItem('toc-open') || '[]'); }
+    catch (e) { open = []; }
+    open.forEach(function (sectionId) {
+      var btn      = qs('[data-section="' + sectionId + '"]');
       var pageList = qs('#toc-pages-' + sectionId);
       if (btn && pageList) {
         btn.setAttribute('aria-expanded', 'true');
@@ -140,49 +149,58 @@
   }
 
   /* ----------------------------------------------------------------
-     ページのロード（コンテンツ注入）
+     ページのロード（fetch → コンテンツ注入）
   ---------------------------------------------------------------- */
   function loadPage(pageId) {
     var page = MANUAL_CONTENT.find(function (p) { return p.id === pageId; });
-    if (!page) {
-      showNotFound(pageId);
-      return;
-    }
+    if (!page) { showNotFound(pageId); return; }
 
-    currentPageId = pageId;
+    var contentBody = qs('#content-body');
+    if (!contentBody) return;
 
-    // URL 更新（ブラウザ履歴）
+    // URL・タイトル・TOC・パンくず・ページナビを先に更新（即時）
     var newUrl = '?page=' + pageId;
     if (window.location.search !== newUrl) {
       history.pushState({ page: pageId }, page.title, newUrl);
     }
-
-    // ページタイトル更新
     document.title = page.title + ' - Web マニュアル';
-
-    // コンテンツ注入
-    var contentBody = qs('#content-body');
-    if (contentBody) {
-      contentBody.innerHTML = page.content;
-    }
-
-    // パンくずリスト更新
     updateBreadcrumb(page);
-
-    // TOC アクティブリンク更新
     setActiveLink(pageId, page.section);
-
-    // 前へ/次へナビゲーション更新
     updatePageNav(pageId);
 
-    // スクロールをトップへ
-    var contentArea = qs('.content-area');
-    if (contentArea) contentArea.scrollTop = 0;
+    // キャッシュ済みならそのまま注入
+    if (pageCache[pageId]) {
+      contentBody.innerHTML = pageCache[pageId];
+      scrollContentTop();
+      return;
+    }
+
+    // ロード中インジケーター
+    contentBody.innerHTML = '<div class="content-placeholder"><p>読み込み中...</p></div>';
+
+    fetch('pages/' + pageId + '.html')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function (html) {
+        pageCache[pageId] = html;
+        contentBody.innerHTML = html;
+        scrollContentTop();
+      })
+      .catch(function () {
+        contentBody.innerHTML =
+          '<h1>読み込みエラー</h1>' +
+          '<p>ページ <code>' + escapeHtml(pageId) + '.html</code> を読み込めませんでした。</p>' +
+          '<p><a href="?page=' + ALL_PAGES[0].id + '">最初のページへ</a></p>';
+      });
   }
 
-  /* ----------------------------------------------------------------
-     ページが見つからない場合の表示
-  ---------------------------------------------------------------- */
+  function scrollContentTop() {
+    var area = qs('.content-area');
+    if (area) area.scrollTop = 0;
+  }
+
   function showNotFound(pageId) {
     var contentBody = qs('#content-body');
     if (contentBody) {
@@ -197,46 +215,33 @@
      パンくずリストの更新
   ---------------------------------------------------------------- */
   function updateBreadcrumb(page) {
-    var section = SECTIONS.find(function (s) { return s.id === page.section; });
+    var section   = SECTIONS.find(function (s) { return s.id === page.section; });
     var bcSection = qs('#breadcrumb-section');
     var bcPage    = qs('#breadcrumb-page');
     var bcSep     = qs('#breadcrumb-sep');
     if (!bcSection || !bcPage || !bcSep) return;
 
-    if (section) {
-      bcSection.textContent = section.label;
-      bcPage.textContent    = page.title;
-      bcSep.style.display   = 'inline';
-    } else {
-      bcSection.textContent = page.title;
-      bcPage.textContent    = '';
-      bcSep.style.display   = 'none';
-    }
+    bcSection.textContent = section ? section.label : page.title;
+    bcPage.textContent    = section ? page.title : '';
+    bcSep.style.display   = section ? 'inline' : 'none';
   }
 
   /* ----------------------------------------------------------------
      TOC アクティブリンクの更新
   ---------------------------------------------------------------- */
   function setActiveLink(pageId, sectionId) {
-    // 全リンクの active クラスを外す
     document.querySelectorAll('.toc-page-link').forEach(function (link) {
       link.classList.remove('active');
     });
-
-    // 対象リンクに active を付ける
-    var activeLink = qs('[data-page-id="' + pageId + '"]');
-    if (activeLink) {
-      activeLink.classList.add('active');
-      // 対応セクションを展開
+    var active = qs('[data-page-id="' + pageId + '"]');
+    if (active) {
+      active.classList.add('active');
       openSection(sectionId);
     }
   }
 
-  /* ----------------------------------------------------------------
-     セクションを開く
-  ---------------------------------------------------------------- */
   function openSection(sectionId) {
-    var btn = qs('[data-section="' + sectionId + '"]');
+    var btn      = qs('[data-section="' + sectionId + '"]');
     var pageList = qs('#toc-pages-' + sectionId);
     if (btn && pageList && !pageList.classList.contains('open')) {
       btn.setAttribute('aria-expanded', 'true');
@@ -248,7 +253,7 @@
      前へ/次へナビゲーションの更新
   ---------------------------------------------------------------- */
   function updatePageNav(pageId) {
-    var idx = ALL_PAGES.findIndex(function (p) { return p.id === pageId; });
+    var idx      = ALL_PAGES.findIndex(function (p) { return p.id === pageId; });
     var btnPrev  = qs('#btn-prev');
     var btnNext  = qs('#btn-next');
     var prevTitle = qs('#prev-title');
@@ -280,88 +285,54 @@
   ---------------------------------------------------------------- */
   function openSidebar() {
     document.body.classList.add('sidebar-open');
-    var overlay = qs('#sidebar-overlay');
+    var overlay   = qs('#sidebar-overlay');
     var hamburger = qs('#hamburger-btn');
-    if (overlay) overlay.style.display = 'block';
+    if (overlay)   overlay.style.display = 'block';
     if (hamburger) hamburger.setAttribute('aria-expanded', 'true');
   }
 
   function closeSidebar() {
     document.body.classList.remove('sidebar-open');
-    var overlay = qs('#sidebar-overlay');
+    var overlay   = qs('#sidebar-overlay');
     var hamburger = qs('#hamburger-btn');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay)   overlay.style.display = 'none';
     if (hamburger) hamburger.setAttribute('aria-expanded', 'false');
   }
 
   function initMobileMenu() {
     var hamburger = qs('#hamburger-btn');
     var overlay   = qs('#sidebar-overlay');
-
-    if (hamburger) {
-      hamburger.addEventListener('click', function () {
-        if (document.body.classList.contains('sidebar-open')) {
-          closeSidebar();
-        } else {
-          openSidebar();
-        }
-      });
-    }
-
-    if (overlay) {
-      overlay.addEventListener('click', closeSidebar);
-    }
-  }
-
-  /* ----------------------------------------------------------------
-     ルーター: 初期ページの決定
-  ---------------------------------------------------------------- */
-  function initRouter() {
-    // ブラウザの戻る/進む対応
-    window.addEventListener('popstate', function (e) {
-      var pageId = (e.state && e.state.page) || getPageFromUrl();
-      if (pageId) {
-        loadPage(pageId);
-      } else if (ALL_PAGES.length) {
-        loadPage(ALL_PAGES[0].id);
-      }
+    if (hamburger) hamburger.addEventListener('click', function () {
+      document.body.classList.contains('sidebar-open') ? closeSidebar() : openSidebar();
     });
-
-    // 初期ページの読み込み
-    var initialPageId = getPageFromUrl();
-    if (initialPageId) {
-      loadPage(initialPageId);
-    } else if (ALL_PAGES.length) {
-      loadPage(ALL_PAGES[0].id);
-    }
+    if (overlay) overlay.addEventListener('click', closeSidebar);
   }
 
   /* ----------------------------------------------------------------
-     URL クエリパラメータからページ ID を取得
+     ルーター
   ---------------------------------------------------------------- */
   function getPageFromUrl() {
-    var params = new URLSearchParams(window.location.search);
-    return params.get('page') || '';
+    return new URLSearchParams(window.location.search).get('page') || '';
   }
 
-  /* ----------------------------------------------------------------
-     HTML エスケープ
-  ---------------------------------------------------------------- */
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  function initRouter() {
+    window.addEventListener('popstate', function (e) {
+      var id = (e.state && e.state.page) || getPageFromUrl();
+      loadPage(id || ALL_PAGES[0].id);
+    });
+
+    var initial = getPageFromUrl();
+    loadPage(initial || ALL_PAGES[0].id);
   }
 
   /* ----------------------------------------------------------------
      パブリック API（search.js から利用）
   ---------------------------------------------------------------- */
   window.ManualApp = {
-    loadPage: loadPage,
-    getAllPages: function () { return ALL_PAGES; },
-    getSections: function () { return SECTIONS; }
+    loadPage:    loadPage,
+    getAllPages:  function () { return ALL_PAGES; },
+    getSections: function () { return SECTIONS; },
+    getCache:    function () { return pageCache; }
   };
 
   /* ----------------------------------------------------------------
