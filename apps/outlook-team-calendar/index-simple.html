@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>チームカレンダービューアー</title>
+
+  <!-- MSAL.js CDN -->
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 13px;
+      background: #f3f2f1;
+      color: #323130;
+    }
+
+    /* ---- トップバー ---- */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 48px;
+      background: #0078d4;
+      color: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,.2);
+    }
+    #topbar h1 { font-size: 16px; font-weight: 600; flex: 1; }
+    #topbar button {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,.5);
+      background: transparent;
+      color: #fff;
+      cursor: pointer;
+    }
+    #topbar button:hover { background: rgba(255,255,255,.15); }
+    #user-info { font-size: 12px; opacity: .85; }
+
+    /* ---- ログイン画面 ---- */
+    #login-page {
+      min-height: calc(100vh - 48px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0078d4, #005a9e);
+    }
+    #login-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 48px 40px;
+      text-align: center;
+      max-width: 380px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0,0,0,.25);
+    }
+    #login-card .icon { font-size: 48px; margin-bottom: 12px; }
+    #login-card h2 { font-size: 20px; margin-bottom: 8px; }
+    #login-card p { color: #666; margin-bottom: 24px; font-size: 14px; }
+    #btn-login {
+      display: inline-block;
+      padding: 10px 28px;
+      background: #0078d4;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 15px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    #btn-login:hover { background: #005a9e; }
+    #login-note { font-size: 11px; color: #aaa; margin-top: 14px; }
+
+    /* ---- メインレイアウト ---- */
+    #app {
+      display: flex;
+      height: calc(100vh - 48px);
+      overflow: hidden;
+    }
+
+    /* ---- サイドバー ---- */
+    #sidebar {
+      width: 260px;
+      flex-shrink: 0;
+      background: #fff;
+      border-right: 1px solid #e1dfdd;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px 4px;
+      border-bottom: 1px solid #e1dfdd;
+    }
+    #sidebar-header h3 { font-size: 13px; font-weight: 600; }
+    #selected-count {
+      font-size: 11px;
+      color: #0078d4;
+      background: #deecf9;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    #search-box {
+      margin: 8px 12px;
+      padding: 6px 10px;
+      border: 1px solid #e1dfdd;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      width: calc(100% - 24px);
+    }
+    #search-box:focus { border-color: #0078d4; }
+    #sidebar-actions {
+      display: flex;
+      gap: 6px;
+      padding: 0 12px 6px;
+    }
+    .btn-sm {
+      font-size: 11px;
+      padding: 3px 8px;
+      border: 1px solid #e1dfdd;
+      border-radius: 3px;
+      background: #fff;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-sm:hover { background: #f3f2f1; }
+    #member-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 8px;
+    }
+    .member-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 6px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .member-item:hover { background: #f3f2f1; }
+    .member-item input { cursor: pointer; accent-color: #0078d4; }
+    .avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .member-info { min-width: 0; }
+    .member-name {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 160px;
+    }
+    .member-mail {
+      font-size: 10px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 160px;
+    }
+
+    /* ---- カレンダーエリア ---- */
+    #calendar-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 10px 12px;
+      gap: 8px;
+    }
+
+    /* ---- 週ナビ ---- */
+    #week-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #week-nav button {
+      font-size: 18px;
+      padding: 2px 10px;
+      border: 1px solid #e1dfdd;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+    }
+    #week-nav button:hover { background: #f3f2f1; }
+    #week-label { font-size: 14px; font-weight: 600; min-width: 200px; text-align: center; }
+
+    /* ---- 凡例 ---- */
+    #legend {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      color: #666;
+    }
+    .leg {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .leg-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    /* ---- カレンダーグリッド ---- */
+    #calendar-grid {
+      flex: 1;
+      overflow: auto;
+      background: #fff;
+      border: 1px solid #e1dfdd;
+      border-radius: 8px;
+    }
+
+    #empty-msg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #888;
+      font-size: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 10;
+      padding: 8px 4px;
+      text-align: center;
+      border-bottom: 2px solid #e1dfdd;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    thead th.today-col {
+      background: #deecf9;
+      border-top: 2px solid #0078d4;
+      color: #0078d4;
+    }
+    thead th .day-name {
+      display: block;
+      font-size: 10px;
+      color: #888;
+      font-weight: 400;
+      text-transform: uppercase;
+    }
+    thead th.today-col .day-name { color: #0078d4; }
+
+    tbody td {
+      vertical-align: top;
+      border: 1px solid #e1dfdd;
+      padding: 4px;
+      min-width: 110px;
+      min-height: 72px;
+    }
+    tbody td.today-col { background: #fafcff; }
+
+    /* 名前セル */
+    .name-cell {
+      width: 60px;
+      text-align: center;
+      padding: 6px 4px !important;
+      background: #f9f8f7 !important;
+      position: sticky;
+      left: 0;
+      z-index: 5;
+      border-right: 2px solid #e1dfdd !important;
+    }
+    .name-cell .avatar { margin: 0 auto 3px; }
+    .name-cell .cell-name {
+      font-size: 10px;
+      color: #666;
+      word-break: break-all;
+      line-height: 1.2;
+    }
+
+    /* 予定チップ */
+    .event-chip {
+      border-left: 3px solid;
+      border-radius: 3px;
+      padding: 2px 5px;
+      margin-bottom: 3px;
+      background: rgba(0,0,0,.04);
+      cursor: default;
+    }
+    .event-chip:hover { filter: brightness(.95); }
+    .event-time { font-size: 10px; color: #666; }
+    .event-title {
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+    }
+    .free-label { font-size: 11px; color: #ccc; padding: 4px; }
+
+    #loading { text-align: center; padding: 40px; color: #666; }
+    #error-bar {
+      background: #fde8e8;
+      border: 1px solid #f87171;
+      border-radius: 5px;
+      padding: 7px 12px;
+      color: #b91c1c;
+      font-size: 12px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ======== 設定：ここだけ書き換えてください ======== -->
+<script>
+  const CLIENT_ID = "YOUR_CLIENT_ID";   // Azure ADのクライアントID
+  const TENANT_ID = "YOUR_TENANT_ID";   // Azure ADのテナントID
+</script>
+<!-- ================================================== -->
+
+<!-- トップバー -->
+<div id="topbar">
+  <h1>📅 チームカレンダービューアー</h1>
+  <span id="user-info"></span>
+  <button id="btn-signout" style="display:none" onclick="signOut()">サインアウト</button>
+</div>
+
+<!-- ログインページ -->
+<div id="login-page">
+  <div id="login-card">
+    <div class="icon">📅</div>
+    <h2>チームカレンダービューアー</h2>
+    <p>Outlookのチームメンバーの予定をまとめて確認できます</p>
+    <button id="btn-login" onclick="signIn()">Microsoftアカウントでサインイン</button>
+    <p id="login-note">Azure AD管理者の承認が必要な場合があります</p>
+  </div>
+</div>
+
+<!-- メインアプリ（ログイン後に表示） -->
+<div id="app" style="display:none">
+
+  <!-- サイドバー -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h3>メンバー選択</h3>
+      <span id="selected-count">0名</span>
+    </div>
+    <input id="search-box" type="text" placeholder="名前・メールで検索..." oninput="filterMembers()" />
+    <div id="sidebar-actions">
+      <button class="btn-sm" onclick="selectAll()">全選択</button>
+      <button class="btn-sm" onclick="clearAll()">クリア</button>
+    </div>
+    <div id="member-list"><p style="padding:12px;color:#888">読み込み中...</p></div>
+  </div>
+
+  <!-- カレンダーエリア -->
+  <div id="calendar-area">
+    <div id="error-bar"></div>
+    <div id="week-nav">
+      <button onclick="changeWeek(-1)">‹</button>
+      <span id="week-label"></span>
+      <button onclick="changeWeek(1)">›</button>
+      <button class="btn-sm" id="btn-today" onclick="goToday()" style="margin-left:6px">今週</button>
+    </div>
+    <div id="legend">
+      <span class="leg"><span class="leg-dot" style="background:#ef4444"></span>予定あり</span>
+      <span class="leg"><span class="leg-dot" style="background:#f59e0b"></span>仮予定</span>
+      <span class="leg"><span class="leg-dot" style="background:#8b5cf6"></span>外出中</span>
+      <span class="leg"><span class="leg-dot" style="background:#22c55e"></span>空き</span>
+    </div>
+    <div id="calendar-grid">
+      <div id="empty-msg">左のパネルからメンバーを選択してください</div>
+    </div>
+    <div id="loading" style="display:none">予定を読み込み中...</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  MSAL 初期化
+// ============================================================
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+    redirectUri: window.location.origin + window.location.pathname,
+  },
+  cache: { cacheLocation: "sessionStorage" }
+};
+
+const loginRequest = {
+  scopes: ["User.ReadBasic.All", "Calendars.Read", "Calendars.Read.Shared"]
+};
+
+const msal = new msal.PublicClientApplication(msalConfig);
+
+// ============================================================
+//  状態
+// ============================================================
+let allUsers = [];
+let selectedIds = new Set();
+let weekStart = getThisMonday();
+let eventsCache = {};
+
+// ============================================================
+//  認証
+// ============================================================
+async function initApp() {
+  await msal.initialize();
+  const resp = await msal.handleRedirectPromise();
+  if (resp) {
+    msal.setActiveAccount(resp.account);
+  }
+  const account = msal.getActiveAccount() || (msal.getAllAccounts()[0] || null);
+  if (account) {
+    msal.setActiveAccount(account);
+    showApp(account);
+  }
+}
+
+async function signIn() {
+  try {
+    const resp = await msal.loginPopup(loginRequest);
+    msal.setActiveAccount(resp.account);
+    showApp(resp.account);
+  } catch (e) {
+    showError("サインインに失敗しました: " + e.message);
+  }
+}
+
+function signOut() {
+  msal.logoutPopup().catch(console.error);
+}
+
+async function getToken() {
+  const account = msal.getActiveAccount();
+  const resp = await msal.acquireTokenSilent({ ...loginRequest, account });
+  return resp.accessToken;
+}
+
+async function graphGet(url) {
+  const token = await getToken();
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(`Graph API ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ============================================================
+//  初期表示
+// ============================================================
+async function showApp(account) {
+  document.getElementById("login-page").style.display = "none";
+  document.getElementById("app").style.display = "flex";
+  document.getElementById("btn-signout").style.display = "";
+  document.getElementById("user-info").textContent = account.username;
+  renderWeekLabel();
+  loadUsers(account);
+}
+
+async function loadUsers(account) {
+  try {
+    const data = await graphGet(
+      "https://graph.microsoft.com/v1.0/users?$select=id,displayName,mail,department&$top=999"
+    );
+    allUsers = data.value.filter(u => u.mail);
+    renderMemberList(allUsers);
+
+    // 自分を自動選択
+    const me = account.username.toLowerCase();
+    const meUser = allUsers.find(u => u.mail?.toLowerCase() === me);
+    if (meUser) {
+      selectedIds.add(meUser.id);
+      updateSelectedCount();
+      fetchAndRenderCalendar();
+    }
+  } catch (e) {
+    showError("メンバー取得失敗: " + e.message);
+  }
+}
+
+// ============================================================
+//  メンバーリスト
+// ============================================================
+function filterMembers() {
+  const q = document.getElementById("search-box").value.toLowerCase();
+  const filtered = allUsers.filter(u =>
+    u.displayName?.toLowerCase().includes(q) || u.mail?.toLowerCase().includes(q)
+  );
+  renderMemberList(filtered);
+}
+
+function renderMemberList(users) {
+  const el = document.getElementById("member-list");
+  if (users.length === 0) {
+    el.innerHTML = '<p style="padding:12px;color:#888;font-size:12px">見つかりません</p>';
+    return;
+  }
+  el.innerHTML = users.map(u => `
+    <label class="member-item">
+      <input type="checkbox" ${selectedIds.has(u.id) ? "checked" : ""}
+        onchange="toggleUser('${u.id}')" />
+      <div class="avatar" style="background:${avatarColor(u.displayName)}">${initials(u.displayName)}</div>
+      <div class="member-info">
+        <div class="member-name">${esc(u.displayName)}</div>
+        <div class="member-mail">${esc(u.mail)}</div>
+      </div>
+    </label>
+  `).join("");
+}
+
+function toggleUser(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  updateSelectedCount();
+  fetchAndRenderCalendar();
+}
+
+function selectAll() {
+  const q = document.getElementById("search-box").value.toLowerCase();
+  const visible = allUsers.filter(u =>
+    u.displayName?.toLowerCase().includes(q) || u.mail?.toLowerCase().includes(q)
+  );
+  visible.forEach(u => selectedIds.add(u.id));
+  renderMemberList(visible.length ? visible : allUsers);
+  updateSelectedCount();
+  fetchAndRenderCalendar();
+}
+
+function clearAll() {
+  selectedIds.clear();
+  filterMembers();
+  updateSelectedCount();
+  renderCalendar();
+}
+
+function updateSelectedCount() {
+  document.getElementById("selected-count").textContent = selectedIds.size + "名";
+}
+
+// ============================================================
+//  週ナビ
+// ============================================================
+function getThisMonday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return d;
+}
+
+function changeWeek(delta) {
+  weekStart = new Date(weekStart);
+  weekStart.setDate(weekStart.getDate() + delta * 7);
+  renderWeekLabel();
+  eventsCache = {};
+  fetchAndRenderCalendar();
+}
+
+function goToday() {
+  weekStart = getThisMonday();
+  renderWeekLabel();
+  eventsCache = {};
+  fetchAndRenderCalendar();
+}
+
+function renderWeekLabel() {
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
+  document.getElementById("week-label").textContent =
+    `${weekStart.getFullYear()}年${weekStart.getMonth()+1}月${weekStart.getDate()}日 〜 ${fmt(end)}`;
+}
+
+function getDays() {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+// ============================================================
+//  カレンダー取得 & 描画
+// ============================================================
+async function fetchAndRenderCalendar() {
+  if (selectedIds.size === 0) { renderCalendar(); return; }
+
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("calendar-grid").style.display = "none";
+
+  const endDate = new Date(weekStart);
+  endDate.setDate(endDate.getDate() + 7);
+
+  const toFetch = [...selectedIds].filter(id => !eventsCache[id]);
+
+  await Promise.all(toFetch.map(async id => {
+    try {
+      const url = `https://graph.microsoft.com/v1.0/users/${id}/calendarView` +
+        `?startDateTime=${weekStart.toISOString()}&endDateTime=${endDate.toISOString()}` +
+        `&$select=id,subject,start,end,isAllDay,showAs&$top=100`;
+      const data = await graphGet(url);
+      eventsCache[id] = data.value;
+    } catch {
+      eventsCache[id] = [];
+    }
+  }));
+
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("calendar-grid").style.display = "";
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const grid = document.getElementById("calendar-grid");
+  const emptyMsg = document.getElementById("empty-msg");
+
+  if (selectedIds.size === 0) {
+    grid.innerHTML = '<div id="empty-msg">左のパネルからメンバーを選択してください</div>';
+    return;
+  }
+
+  const days = getDays();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const DAY_NAMES = ["日","月","火","水","木","金","土"];
+  const selectedUsers = allUsers.filter(u => selectedIds.has(u.id));
+
+  const STATUS_COLOR = {
+    busy: "#ef4444", tentative: "#f59e0b", free: "#22c55e",
+    oof: "#8b5cf6", workingElsewhere: "#06b6d4"
+  };
+
+  const headCols = days.map(d => {
+    const isToday = d.getTime() === today.getTime();
+    return `<th class="${isToday ? 'today-col' : ''}">
+      <span class="day-name">${DAY_NAMES[d.getDay()]}</span>
+      ${d.getMonth()+1}/${d.getDate()}
+    </th>`;
+  }).join("");
+
+  const rows = selectedUsers.map(u => {
+    const userEvents = eventsCache[u.id] || [];
+    const cells = days.map(d => {
+      const isToday = d.getTime() === today.getTime();
+      const dayEvents = userEvents.filter(ev => eventOnDay(ev, d));
+      const chips = dayEvents.length === 0
+        ? '<span class="free-label">空き</span>'
+        : dayEvents.map(ev => {
+            const color = STATUS_COLOR[ev.showAs] || "#0078d4";
+            const timeStr = ev.isAllDay ? "終日"
+              : fmtTime(ev.start.dateTime) + "–" + fmtTime(ev.end.dateTime);
+            return `<div class="event-chip" style="border-left-color:${color};background:${color}18"
+                      title="${esc(ev.subject)}\n${timeStr}">
+                      <div class="event-time">${timeStr}</div>
+                      <div class="event-title">${esc(ev.subject || "(タイトルなし)")}</div>
+                    </div>`;
+          }).join("");
+      return `<td class="${isToday ? 'today-col' : ''}">${chips}</td>`;
+    }).join("");
+
+    const color = avatarColor(u.displayName);
+    return `<tr>
+      <td class="name-cell">
+        <div class="avatar" style="background:${color}">${initials(u.displayName)}</div>
+        <div class="cell-name">${esc(u.displayName.split(/\s+/)[0])}</div>
+      </td>
+      ${cells}
+    </tr>`;
+  }).join("");
+
+  grid.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th style="width:60px;background:#f9f8f7;position:sticky;left:0;z-index:11"></th>
+          ${headCols}
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ============================================================
+//  ユーティリティ
+// ============================================================
+function eventOnDay(ev, day) {
+  const target = day.getTime();
+  if (ev.isAllDay) {
+    const s = new Date(ev.start.date || ev.start.dateTime); s.setHours(0,0,0,0);
+    const e = new Date(ev.end.date || ev.end.dateTime); e.setDate(e.getDate()-1); e.setHours(0,0,0,0);
+    return s.getTime() <= target && target <= e.getTime();
+  }
+  const evDay = new Date(ev.start.dateTime); evDay.setHours(0,0,0,0);
+  return evDay.getTime() === target;
+}
+
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.getHours().toString().padStart(2,"0") + ":" + d.getMinutes().toString().padStart(2,"0");
+}
+
+function initials(name = "") {
+  return name.split(/\s+/).slice(0,2).map(w => w[0]).join("").toUpperCase();
+}
+
+const COLORS = ["#4f46e5","#0891b2","#059669","#d97706","#dc2626","#7c3aed","#db2777","#0284c7"];
+function avatarColor(name = "") {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
+  return COLORS[Math.abs(h) % COLORS.length];
+}
+
+function esc(str = "") {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function showError(msg) {
+  const el = document.getElementById("error-bar");
+  el.textContent = "⚠ " + msg;
+  el.style.display = "block";
+}
+
+// 起動
+initApp().catch(e => showError("初期化エラー: " + e.message));
+</script>
+</body>
+</html>
