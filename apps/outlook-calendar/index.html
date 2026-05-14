@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outlook 予定表ビューア</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ===== Login Screen ===== -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
+      <div class="login-icon">&#128197;</div>
+      <h1>Outlook 予定表ビューア</h1>
+      <p>Microsoft 365 アカウントでサインインして<br>チームメンバーの予定を確認できます</p>
+      <button id="login-btn" class="btn btn-primary btn-lg">
+        <svg width="20" height="20" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right:8px;vertical-align:middle">
+          <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+          <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+          <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+        </svg>
+        Microsoft 365 でサインイン
+      </button>
+      <p class="note" id="config-note" style="display:none">
+        &#9888;&#65039; Azure AD の設定が必要です。下の「設定」から入力してください。
+      </p>
+      <button id="open-config-btn" class="btn btn-ghost" style="margin-top:8px">&#9881;&#65039; Azure AD 設定</button>
+    </div>
+  </div>
+
+  <!-- ===== Main App ===== -->
+  <div id="app-screen" class="screen hidden">
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <span class="brand-icon">&#128197;</span>
+        <span class="brand-name">予定表ビューア</span>
+      </div>
+
+      <div class="header-nav">
+        <button id="prev-btn" class="btn btn-icon" title="前へ">&#8249;</button>
+        <span id="date-label" class="date-label"></span>
+        <button id="next-btn" class="btn btn-icon" title="次へ">&#8250;</button>
+        <button id="today-btn" class="btn btn-sm">今日</button>
+      </div>
+
+      <div class="header-actions">
+        <div class="view-tabs" role="group">
+          <button class="view-tab" data-view="day">日</button>
+          <button class="view-tab active" data-view="week">週</button>
+          <button class="view-tab" data-view="month">月</button>
+        </div>
+        <button id="user-select-btn" class="btn btn-primary btn-sm">
+          &#43; メンバー選択
+        </button>
+        <div class="user-menu">
+          <span id="signed-in-name" class="signed-in-name"></span>
+          <button id="logout-btn" class="btn btn-ghost btn-sm">サインアウト</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- User Selector Panel (slide-in) -->
+    <div id="user-panel" class="user-panel hidden">
+      <div class="user-panel-inner">
+        <div class="user-panel-head">
+          <h2>メンバーを選択</h2>
+          <button id="close-panel-btn" class="btn btn-icon close-btn">&#10005;</button>
+        </div>
+        <div class="search-wrap">
+          <span class="search-icon">&#128269;</span>
+          <input id="user-search" type="text" placeholder="名前またはメールで検索..." class="search-input" autocomplete="off" />
+        </div>
+        <div class="user-panel-hint">最大 6 名まで選択できます</div>
+        <div id="user-list" class="user-list">
+          <div class="skeleton-list">
+            <div class="skeleton-item"></div>
+            <div class="skeleton-item"></div>
+            <div class="skeleton-item"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="panel-overlay" class="panel-overlay hidden"></div>
+
+    <!-- Selected Users Bar -->
+    <div id="selected-bar" class="selected-bar hidden">
+      <span class="selected-label">表示中:</span>
+      <div id="user-chips" class="user-chips"></div>
+      <button id="clear-all-btn" class="btn btn-ghost btn-xs">すべて解除</button>
+    </div>
+
+    <!-- Calendar Container -->
+    <div id="calendar-wrap" class="calendar-wrap">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">&#128101;</div>
+        <p>「メンバー選択」からメンバーを追加すると<br>横並びで予定を確認できます</p>
+        <button class="btn btn-primary" id="empty-select-btn">&#43; メンバーを選択する</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== Azure AD Config Modal ===== -->
+  <div id="config-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Azure AD アプリ設定</h2>
+        <button id="config-close-btn" class="btn btn-icon close-btn">&#10005;</button>
+      </div>
+      <div class="modal-body">
+        <p>初回のみ、Azure AD に登録したアプリの情報を入力してください。<br>
+        入力値はこのブラウザにのみ保存されます。</p>
+
+        <details class="setup-guide">
+          <summary>&#128214; Azure AD アプリの登録手順</summary>
+          <ol>
+            <li><a href="https://portal.azure.com" target="_blank" rel="noopener">Azure Portal</a> を開き「アプリの登録」へ</li>
+            <li>「新規登録」→ 任意の名前を入力</li>
+            <li>リダイレクト URI に <code id="redirect-uri-hint"></code> を設定（シングルページアプリ）</li>
+            <li>「APIのアクセス許可」から以下を追加（委任）:<br>
+              <code>User.ReadBasic.All</code>、<code>Calendars.Read</code></li>
+            <li>必要に応じて管理者の同意を付与</li>
+            <li>「概要」からアプリケーション (クライアント) ID とディレクトリ (テナント) ID をコピー</li>
+          </ol>
+        </details>
+
+        <label class="form-label">
+          クライアント ID（アプリケーション ID）
+          <input id="cfg-client-id" type="text" class="form-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" spellcheck="false" />
+        </label>
+        <label class="form-label">
+          テナント ID（ディレクトリ ID）
+          <input id="cfg-tenant-id" type="text" class="form-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" spellcheck="false" />
+        </label>
+        <p id="config-error" class="form-error hidden"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="config-cancel-btn" class="btn btn-ghost">キャンセル</button>
+        <button id="config-save-btn" class="btn btn-primary">保存してサインイン</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/msal-browser.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
