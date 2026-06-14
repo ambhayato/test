@@ -58,7 +58,13 @@
         <button class="btn btn-primary btn-sm" id="btn-new-event">
           <i class="bi bi-plus-lg"></i> 新しい予定
         </button>
-        <div class="btn-group btn-group-sm ms-2" id="view-switcher">
+        <div class="d-flex align-items-center gap-1 ms-2">
+          <button class="btn btn-outline-secondary btn-sm" id="cal-prev" title="前へ"><i class="bi bi-chevron-left"></i></button>
+          <button class="btn btn-outline-secondary btn-sm" id="cal-today">今日</button>
+          <button class="btn btn-outline-secondary btn-sm" id="cal-next" title="次へ"><i class="bi bi-chevron-right"></i></button>
+          <span id="cal-title" class="fw-semibold ms-1" style="font-size:15px;min-width:160px"></span>
+        </div>
+        <div class="btn-group btn-group-sm ms-2">
           <button class="btn btn-outline-secondary" data-view="dayGridMonth">月</button>
           <button class="btn btn-outline-secondary active" data-view="timeGridWeek">週</button>
           <button class="btn btn-outline-secondary" data-view="timeGridDay">日</button>
@@ -73,9 +79,7 @@
           <div id="search-results"></div>
         </div>
       </div>
-      <div id="calendar-container">
-        <div id="calendar"></div>
-      </div>
+      <div id="calendars-area"></div>
     </div>
 
   </div><!-- #main -->

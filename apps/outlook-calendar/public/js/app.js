@@ -4,9 +4,8 @@ const USER_COLORS = ['#0078d4', '#107c10', '#c43d1c', '#8764b8', '#ca5010', '#03
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const state = {
-  calendar: null,
   currentEvent: null,
-  otherUsers: [],          // { email, name, color, active }
+  otherUsers: [],      // {email, name, color}
   miniCalDate: new Date(),
   searchTimer: null,
   myEmail: ''
@@ -56,111 +55,190 @@ function formatDateRange(start, end) {
   return `${formatDateTime(start)} 〜 ${formatDateTime(end)}`;
 }
 
-// ── Config / Settings ─────────────────────────────────────────────────────────
-async function loadConfig() {
-  try {
-    const cfg = await apiFetch('/api/config');
-    if (cfg.configured) {
-      document.getElementById('connection-status').textContent = '接続済み';
-      document.getElementById('connection-status').className = 'badge bg-success';
-      state.myEmail = cfg.username;
-      document.getElementById('my-calendar-label').textContent = cfg.username;
-    } else {
-      openSettingsModal();
+// ── Toolbar title ──────────────────────────────────────────────────────────────
+function updateCalTitle(title) {
+  document.getElementById('cal-title').textContent = title || '';
+}
+
+// ── Multi-calendar manager ─────────────────────────────────────────────────────
+const calMgr = {
+  items: [],   // [{id, email, name, color, calendar, colEl, isMine}]
+  date: new Date(),
+  view: 'timeGridWeek',
+  _syncing: false,
+  _scrollSyncing: false,
+
+  get myCalendar() {
+    return this.items.find(i => i.isMine)?.calendar;
+  },
+
+  add(user, isMine = false) {
+    const safeId = 'col-' + (user.email || 'mine').replace(/[^a-z0-9]/gi, '-');
+
+    const colEl = document.createElement('div');
+    colEl.className = 'calendar-column';
+    colEl.id = safeId;
+
+    const headerEl = document.createElement('div');
+    headerEl.className = 'cal-col-header';
+    headerEl.style.cssText = `border-bottom: 3px solid ${user.color}; background: ${user.color}14;`;
+    headerEl.innerHTML = `
+      <span class="cal-col-dot" style="background:${user.color}"></span>
+      <span class="cal-col-name">${user.name}</span>
+      ${!isMine ? `<button class="cal-col-remove" title="カレンダーを削除">×</button>` : ''}
+    `;
+
+    const innerEl = document.createElement('div');
+    innerEl.className = 'cal-inner';
+
+    colEl.appendChild(headerEl);
+    colEl.appendChild(innerEl);
+
+    if (!isMine) {
+      headerEl.querySelector('.cal-col-remove').addEventListener('click', () => {
+        this.remove(user.email);
+        const idx = state.otherUsers.findIndex(u => u.email === user.email);
+        if (idx >= 0) state.otherUsers.splice(idx, 1);
+        renderOtherUsersList();
+      });
     }
-    document.getElementById('cfg-host').value = cfg.host || '';
-    document.getElementById('cfg-username').value = cfg.username || '';
-    document.getElementById('cfg-auth').value = cfg.auth || 'ntlm';
-  } catch (e) {
-    console.error(e);
-  }
-}
 
-function openSettingsModal() {
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('settingsModal')).show();
-}
+    document.getElementById('calendars-area').appendChild(colEl);
 
-document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
+    const calendar = new FullCalendar.Calendar(innerEl, {
+      locale: 'ja',
+      initialView: this.view,
+      initialDate: this.date,
+      headerToolbar: false,
+      height: 'auto',
+      nowIndicator: true,
+      selectable: isMine,
+      editable: isMine,
+      scrollTime: '08:00:00',
+      slotMinTime: '06:00:00',
+      slotMaxTime: '23:00:00',
+      allDaySlot: true,
+      eventSources: [buildEventSource(isMine ? '' : user.email, user.color, isMine)],
 
-document.getElementById('btn-save-config').addEventListener('click', async () => {
-  const host = document.getElementById('cfg-host').value.trim();
-  const username = document.getElementById('cfg-username').value.trim();
-  const password = document.getElementById('cfg-password').value;
-  const auth = document.getElementById('cfg-auth').value;
-  const errEl = document.getElementById('cfg-error');
-  const okEl = document.getElementById('cfg-success');
+      eventClick: (info) => showEventDetail(info.event),
+      select: isMine ? (info) => openEventModal(null, info.start, info.end) : null,
+      eventDrop: isMine ? (info) => updateEventTime(info.event) : null,
+      eventResize: isMine ? (info) => updateEventTime(info.event) : null,
 
-  errEl.classList.add('d-none');
-  okEl.classList.add('d-none');
-
-  if (!host || !username || !password) {
-    errEl.textContent = 'すべての必須項目を入力してください';
-    errEl.classList.remove('d-none');
-    return;
-  }
-
-  try {
-    await apiFetch('/api/config', {
-      method: 'POST',
-      body: JSON.stringify({ host, username, password, auth })
+      datesSet: (info) => {
+        if (!this._syncing && isMine) {
+          this.date = info.view.currentStart;
+          state.miniCalDate = info.view.currentStart;
+          renderMiniCalendar();
+          updateCalTitle(info.view.title);
+        }
+      }
     });
-    state.myEmail = username;
-    document.getElementById('connection-status').textContent = '接続済み';
-    document.getElementById('connection-status').className = 'badge bg-success';
-    document.getElementById('my-calendar-label').textContent = username;
-    bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
-    showToast('設定を保存しました');
-    state.calendar?.refetchEvents();
-  } catch (e) {
-    errEl.textContent = e.message;
-    errEl.classList.remove('d-none');
+
+    calendar.render();
+
+    // Bind scroll sync after render
+    setTimeout(() => this._bindScrollSync(innerEl), 100);
+
+    const item = { id: safeId, email: user.email, name: user.name, color: user.color, calendar, colEl, isMine };
+    this.items.push(item);
+
+    // Update title from master
+    if (isMine) updateCalTitle(calendar.view.title);
+
+    return item;
+  },
+
+  remove(email) {
+    const idx = this.items.findIndex(i => !i.isMine && i.email === email);
+    if (idx < 0) return;
+    const { calendar, colEl } = this.items[idx];
+    calendar.destroy();
+    colEl.remove();
+    this.items.splice(idx, 1);
+  },
+
+  gotoDate(date) {
+    this._syncing = true;
+    this.date = date;
+    this.items.forEach(i => i.calendar.gotoDate(date));
+    this._syncing = false;
+    const mc = this.myCalendar;
+    if (mc) updateCalTitle(mc.view.title);
+    state.miniCalDate = date;
+    renderMiniCalendar();
+  },
+
+  changeView(view) {
+    this.view = view;
+    this.items.forEach(i => i.calendar.changeView(view));
+    const mc = this.myCalendar;
+    if (mc) updateCalTitle(mc.view.title);
+  },
+
+  prev() {
+    const mc = this.myCalendar;
+    if (!mc) return;
+    this._syncing = true;
+    mc.prev();
+    this.date = mc.getDate();
+    this.items.filter(i => !i.isMine).forEach(i => i.calendar.gotoDate(this.date));
+    this._syncing = false;
+    updateCalTitle(mc.view.title);
+    state.miniCalDate = this.date;
+    renderMiniCalendar();
+  },
+
+  next() {
+    const mc = this.myCalendar;
+    if (!mc) return;
+    this._syncing = true;
+    mc.next();
+    this.date = mc.getDate();
+    this.items.filter(i => !i.isMine).forEach(i => i.calendar.gotoDate(this.date));
+    this._syncing = false;
+    updateCalTitle(mc.view.title);
+    state.miniCalDate = this.date;
+    renderMiniCalendar();
+  },
+
+  today() { this.gotoDate(new Date()); },
+
+  refetchAll() { this.items.forEach(i => i.calendar.refetchEvents()); },
+
+  setVisible(email, visible) {
+    const item = this.items.find(i => i.email === email);
+    if (item) item.colEl.style.display = visible ? '' : 'none';
+  },
+
+  setMyVisible(visible) {
+    const item = this.items.find(i => i.isMine);
+    if (item) item.colEl.style.display = visible ? '' : 'none';
+  },
+
+  _bindScrollSync(innerEl) {
+    // Sync vertical scroll across all calendar columns
+    const scroller = innerEl.querySelector('.fc-scroller-liquid-absolute');
+    if (!scroller) return;
+    scroller.addEventListener('scroll', () => {
+      if (this._scrollSyncing) return;
+      this._scrollSyncing = true;
+      const top = scroller.scrollTop;
+      this.items.forEach(item => {
+        const s = item.colEl.querySelector('.fc-scroller-liquid-absolute');
+        if (s && s !== scroller) s.scrollTop = top;
+      });
+      setTimeout(() => { this._scrollSyncing = false; }, 20);
+    });
   }
-});
+};
 
-document.getElementById('btn-test-connection').addEventListener('click', async () => {
-  const errEl = document.getElementById('cfg-error');
-  const okEl = document.getElementById('cfg-success');
-  errEl.classList.add('d-none');
-  okEl.classList.add('d-none');
-
-  const host = document.getElementById('cfg-host').value.trim();
-  const username = document.getElementById('cfg-username').value.trim();
-  const password = document.getElementById('cfg-password').value;
-  const auth = document.getElementById('cfg-auth').value;
-
-  if (!host || !username || !password) {
-    errEl.textContent = 'すべての項目を入力してください';
-    errEl.classList.remove('d-none');
-    return;
-  }
-
-  const btn = document.getElementById('btn-test-connection');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>テスト中...';
-
-  try {
-    await apiFetch('/api/config', { method: 'POST', body: JSON.stringify({ host, username, password, auth }) });
-    await apiFetch('/api/config/test', { method: 'POST' });
-    okEl.textContent = '接続成功！';
-    okEl.classList.remove('d-none');
-  } catch (e) {
-    errEl.textContent = e.message;
-    errEl.classList.remove('d-none');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-plug me-1"></i>接続テスト';
-  }
-});
-
-// ── Event sources for FullCalendar ────────────────────────────────────────────
+// ── Event sources ─────────────────────────────────────────────────────────────
 function buildEventSource(email, color, isMine) {
   return {
     id: email || 'mine',
     events: async (fetchInfo) => {
-      const params = new URLSearchParams({
-        start: fetchInfo.startStr,
-        end: fetchInfo.endStr
-      });
+      const params = new URLSearchParams({ start: fetchInfo.startStr, end: fetchInfo.endStr });
       const url = isMine
         ? `/api/events?${params}`
         : `/api/users/${encodeURIComponent(email)}/events?${params}`;
@@ -194,84 +272,110 @@ function buildEventSource(email, color, isMine) {
   };
 }
 
-// ── FullCalendar init ─────────────────────────────────────────────────────────
-function initCalendar() {
-  const calEl = document.getElementById('calendar');
-
-  state.calendar = new FullCalendar.Calendar(calEl, {
-    locale: 'ja',
-    initialView: 'timeGridWeek',
-    headerToolbar: {
-      left: 'prev,next today',
-      center: 'title',
-      right: ''
-    },
-    height: 'auto',
-    nowIndicator: true,
-    selectable: true,
-    editable: true,
-    eventSources: [buildEventSource('', USER_COLORS[0], true)],
-
-    // Click on date → new event
-    dateClick(info) {
-      openEventModal(null, info.date);
-    },
-
-    // Select time range → new event
-    select(info) {
-      openEventModal(null, info.start, info.end);
-    },
-
-    // Click event → detail panel
-    eventClick(info) {
-      showEventDetail(info.event);
-    },
-
-    // Drag-drop update
-    eventDrop(info) {
-      updateEventTime(info.event);
-    },
-
-    // Resize update
-    eventResize(info) {
-      updateEventTime(info.event);
-    },
-
-    // Sync mini-calendar navigation
-    datesSet(info) {
-      state.miniCalDate = info.view.currentStart;
-      renderMiniCalendar();
+// ── Config / Settings ─────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const cfg = await apiFetch('/api/config');
+    if (cfg.configured) {
+      document.getElementById('connection-status').textContent = '接続済み';
+      document.getElementById('connection-status').className = 'badge bg-success';
+      state.myEmail = cfg.username;
+      document.getElementById('my-calendar-label').textContent = cfg.username;
+    } else {
+      openSettingsModal();
     }
-  });
-
-  state.calendar.render();
+    document.getElementById('cfg-host').value = cfg.host || '';
+    document.getElementById('cfg-username').value = cfg.username || '';
+    document.getElementById('cfg-auth').value = cfg.auth || 'ntlm';
+  } catch (e) {
+    console.error(e);
+  }
 }
 
-async function updateEventTime(fcEvent) {
-  if (!fcEvent.extendedProps.isMine) {
-    fcEvent.revert?.();
-    showToast('他のユーザーの予定は変更できません', 'warning');
+function openSettingsModal() {
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('settingsModal')).show();
+}
+
+document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
+
+document.getElementById('btn-save-config').addEventListener('click', async () => {
+  const host = document.getElementById('cfg-host').value.trim();
+  const username = document.getElementById('cfg-username').value.trim();
+  const password = document.getElementById('cfg-password').value;
+  const auth = document.getElementById('cfg-auth').value;
+  const errEl = document.getElementById('cfg-error');
+  const okEl = document.getElementById('cfg-success');
+  errEl.classList.add('d-none');
+  okEl.classList.add('d-none');
+
+  if (!host || !username || !password) {
+    errEl.textContent = 'すべての必須項目を入力してください';
+    errEl.classList.remove('d-none');
     return;
   }
   try {
-    await apiFetch(`/api/events/${fcEvent.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        changeKey: fcEvent.extendedProps.changeKey,
-        title: fcEvent.title,
-        start: fcEvent.start.toISOString(),
-        end: (fcEvent.end || fcEvent.start).toISOString(),
-        location: fcEvent.extendedProps.location,
-        body: fcEvent.extendedProps.body
-      })
-    });
-    showToast('予定を更新しました');
-    state.calendar.refetchEvents();
+    await apiFetch('/api/config', { method: 'POST', body: JSON.stringify({ host, username, password, auth }) });
+    state.myEmail = username;
+    document.getElementById('connection-status').textContent = '接続済み';
+    document.getElementById('connection-status').className = 'badge bg-success';
+    document.getElementById('my-calendar-label').textContent = username;
+    bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+    showToast('設定を保存しました');
+    calMgr.refetchAll();
   } catch (e) {
-    fcEvent.revert?.();
-    showToast(e.message, 'danger');
+    errEl.textContent = e.message;
+    errEl.classList.remove('d-none');
   }
-}
+});
+
+document.getElementById('btn-test-connection').addEventListener('click', async () => {
+  const errEl = document.getElementById('cfg-error');
+  const okEl = document.getElementById('cfg-success');
+  errEl.classList.add('d-none');
+  okEl.classList.add('d-none');
+  const host = document.getElementById('cfg-host').value.trim();
+  const username = document.getElementById('cfg-username').value.trim();
+  const password = document.getElementById('cfg-password').value;
+  const auth = document.getElementById('cfg-auth').value;
+  if (!host || !username || !password) {
+    errEl.textContent = 'すべての項目を入力してください';
+    errEl.classList.remove('d-none');
+    return;
+  }
+  const btn = document.getElementById('btn-test-connection');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>テスト中...';
+  try {
+    await apiFetch('/api/config', { method: 'POST', body: JSON.stringify({ host, username, password, auth }) });
+    await apiFetch('/api/config/test', { method: 'POST' });
+    okEl.textContent = '接続成功！';
+    okEl.classList.remove('d-none');
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-plug me-1"></i>接続テスト';
+  }
+});
+
+// ── Toolbar controls ──────────────────────────────────────────────────────────
+document.getElementById('cal-prev').addEventListener('click', () => calMgr.prev());
+document.getElementById('cal-next').addEventListener('click', () => calMgr.next());
+document.getElementById('cal-today').addEventListener('click', () => calMgr.today());
+
+document.querySelectorAll('[data-view]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    calMgr.changeView(btn.dataset.view);
+  });
+});
+
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  calMgr.refetchAll();
+  showToast('更新しました');
+});
 
 // ── Event detail panel ────────────────────────────────────────────────────────
 function showEventDetail(fcEvent) {
@@ -284,30 +388,18 @@ function showEventDetail(fcEvent) {
 
   const loc = fcEvent.extendedProps.location;
   const locRow = document.getElementById('detail-location-row');
-  if (loc) {
-    document.getElementById('detail-location').textContent = loc;
-    locRow.style.display = '';
-  } else {
-    locRow.style.display = 'none';
-  }
+  if (loc) { document.getElementById('detail-location').textContent = loc; locRow.style.display = ''; }
+  else { locRow.style.display = 'none'; }
 
   const org = fcEvent.extendedProps.organizer;
   const orgRow = document.getElementById('detail-organizer-row');
-  if (org) {
-    document.getElementById('detail-organizer').textContent = org;
-    orgRow.style.display = '';
-  } else {
-    orgRow.style.display = 'none';
-  }
+  if (org) { document.getElementById('detail-organizer').textContent = org; orgRow.style.display = ''; }
+  else { orgRow.style.display = 'none'; }
 
   const body = fcEvent.extendedProps.body;
   const bodyRow = document.getElementById('detail-body-row');
-  if (body && body.trim()) {
-    document.getElementById('detail-body').textContent = body;
-    bodyRow.style.display = '';
-  } else {
-    bodyRow.style.display = 'none';
-  }
+  if (body && body.trim()) { document.getElementById('detail-body').textContent = body; bodyRow.style.display = ''; }
+  else { bodyRow.style.display = 'none'; }
 
   const isMine = fcEvent.extendedProps.isMine;
   document.getElementById('btn-detail-edit').style.display = isMine ? '' : 'none';
@@ -338,7 +430,7 @@ document.getElementById('btn-detail-delete').addEventListener('click', async () 
     );
     document.getElementById('event-detail-panel').classList.remove('open');
     showToast('予定を削除しました');
-    state.calendar.refetchEvents();
+    calMgr.refetchAll();
   } catch (e) {
     showToast(e.message, 'danger');
   }
@@ -348,7 +440,6 @@ document.getElementById('btn-detail-delete').addEventListener('click', async () 
 function openEventModal(fcEvent, startDate, endDate) {
   const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal'));
   const isEdit = !!fcEvent;
-
   document.getElementById('eventModalTitle').textContent = isEdit ? '予定を編集' : '新しい予定';
   document.getElementById('ev-error').classList.add('d-none');
 
@@ -375,7 +466,6 @@ function openEventModal(fcEvent, startDate, endDate) {
     document.getElementById('ev-allday').checked = false;
     document.getElementById('ev-attendees').value = '';
   }
-
   modal.show();
 }
 
@@ -414,28 +504,18 @@ document.getElementById('btn-save-event').addEventListener('click', async () => 
     if (id) {
       await apiFetch(`/api/events/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({
-          changeKey, title,
-          start: new Date(start).toISOString(),
-          end: new Date(end).toISOString(),
-          location, body
-        })
+        body: JSON.stringify({ changeKey, title, start: new Date(start).toISOString(), end: new Date(end).toISOString(), location, body })
       });
       showToast('予定を更新しました');
     } else {
       await apiFetch('/api/events', {
         method: 'POST',
-        body: JSON.stringify({
-          title,
-          start: new Date(start).toISOString(),
-          end: new Date(end).toISOString(),
-          location, body, attendees, allDay
-        })
+        body: JSON.stringify({ title, start: new Date(start).toISOString(), end: new Date(end).toISOString(), location, body, attendees, allDay })
       });
       showToast('予定を作成しました');
     }
     bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
-    state.calendar.refetchEvents();
+    calMgr.refetchAll();
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('d-none');
@@ -451,51 +531,24 @@ function renderOtherUsersList() {
   list.innerHTML = '';
   state.otherUsers.forEach((user, idx) => {
     const div = document.createElement('div');
-    div.className = `user-item${user.active ? '' : ' inactive'}`;
+    div.className = 'user-item';
     div.innerHTML = `
       <span class="user-color-dot" style="background:${user.color}"></span>
       <span class="user-name" title="${user.email}">${user.name || user.email}</span>
-      <button class="btn-icon btn-remove-user" data-idx="${idx}" title="削除" style="color:#888;font-size:11px;">×</button>
-      <input type="checkbox" class="form-check-input user-toggle" ${user.active ? 'checked' : ''}>
+      <button class="btn-icon btn-remove-user" data-idx="${idx}" style="color:#888;font-size:11px;" title="削除">×</button>
+      <input type="checkbox" class="form-check-input user-toggle" checked>
     `;
     div.querySelector('.user-toggle').addEventListener('change', e => {
-      state.otherUsers[idx].active = e.target.checked;
+      calMgr.setVisible(user.email, e.target.checked);
       div.classList.toggle('inactive', !e.target.checked);
-      toggleUserEventSource(user, e.target.checked);
     });
     div.querySelector('.btn-remove-user').addEventListener('click', () => {
-      removeOtherUser(idx);
+      calMgr.remove(user.email);
+      state.otherUsers.splice(idx, 1);
+      renderOtherUsersList();
     });
     list.appendChild(div);
   });
-}
-
-function addOtherUser(email, name) {
-  const color = USER_COLORS[(state.otherUsers.length + 1) % USER_COLORS.length];
-  const user = { email, name: name || email, color, active: true };
-  state.otherUsers.push(user);
-  state.calendar.addEventSource(buildEventSource(email, color, false));
-  renderOtherUsersList();
-}
-
-function removeOtherUser(idx) {
-  const user = state.otherUsers[idx];
-  const src = state.calendar.getEventSourceById(user.email);
-  if (src) src.remove();
-  state.otherUsers.splice(idx, 1);
-  renderOtherUsersList();
-}
-
-function toggleUserEventSource(user, active) {
-  const src = state.calendar.getEventSourceById(user.email);
-  if (!src) return;
-  if (active) {
-    src.refetch();
-  } else {
-    state.calendar.getEvents()
-      .filter(e => e.extendedProps.ownerEmail === user.email)
-      .forEach(e => e.remove());
-  }
 }
 
 document.getElementById('btn-add-user').addEventListener('click', () => {
@@ -522,25 +575,46 @@ document.getElementById('btn-confirm-add-user').addEventListener('click', () => 
     return;
   }
 
-  addOtherUser(email, name);
+  const color = USER_COLORS[(state.otherUsers.length + 1) % USER_COLORS.length];
+  const user = { email, name: name || email, color };
+  state.otherUsers.push(user);
+  calMgr.add(user, false);
+  renderOtherUsersList();
+
   bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
   showToast(`${name || email} のカレンダーを追加しました`);
 });
 
-// ── View switcher ─────────────────────────────────────────────────────────────
-document.querySelectorAll('[data-view]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.calendar.changeView(btn.dataset.view);
-  });
+// ── My calendar toggle ────────────────────────────────────────────────────────
+document.querySelector('#my-calendar-item .user-toggle').addEventListener('change', e => {
+  calMgr.setMyVisible(e.target.checked);
+  document.getElementById('my-calendar-item').classList.toggle('inactive', !e.target.checked);
 });
 
-// ── Refresh ───────────────────────────────────────────────────────────────────
-document.getElementById('btn-refresh').addEventListener('click', () => {
-  state.calendar.refetchEvents();
-  showToast('更新しました');
-});
+// ── Update event time (drag/drop) ─────────────────────────────────────────────
+async function updateEventTime(fcEvent) {
+  if (!fcEvent.extendedProps.isMine) {
+    showToast('他のユーザーの予定は変更できません', 'warning');
+    return;
+  }
+  try {
+    await apiFetch(`/api/events/${fcEvent.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        changeKey: fcEvent.extendedProps.changeKey,
+        title: fcEvent.title,
+        start: fcEvent.start.toISOString(),
+        end: (fcEvent.end || fcEvent.start).toISOString(),
+        location: fcEvent.extendedProps.location,
+        body: fcEvent.extendedProps.body
+      })
+    });
+    showToast('予定を更新しました');
+    calMgr.refetchAll();
+  } catch (e) {
+    showToast(e.message, 'danger');
+  }
+}
 
 // ── Search ────────────────────────────────────────────────────────────────────
 const searchInput = document.getElementById('search-input');
@@ -582,22 +656,20 @@ function renderSearchResults(events) {
     return;
   }
   searchResults.innerHTML = events.slice(0, 20).map(ev => `
-    <div class="search-result-item" data-start="${ev.start}" data-id="${ev.id}">
+    <div class="search-result-item" data-start="${ev.start}">
       <div class="search-result-title">${escapeHtml(ev.title)}</div>
       <div class="search-result-meta">
-        ${formatDateTime(ev.start)}
-        ${ev.location ? ` · ${escapeHtml(ev.location)}` : ''}
+        ${formatDateTime(ev.start)}${ev.location ? ` · ${escapeHtml(ev.location)}` : ''}
       </div>
     </div>
   `).join('');
   searchResults.classList.add('visible');
-
   searchResults.querySelectorAll('.search-result-item').forEach(item => {
     item.addEventListener('click', () => {
-      const start = new Date(item.dataset.start);
-      state.calendar.gotoDate(start);
-      state.calendar.changeView('timeGridDay');
-      document.querySelector('[data-view="timeGridDay"]').click();
+      calMgr.gotoDate(new Date(item.dataset.start));
+      calMgr.changeView('timeGridDay');
+      document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-view="timeGridDay"]').classList.add('active');
       searchResults.classList.remove('visible');
       searchInput.value = '';
     });
@@ -616,39 +688,31 @@ function renderMiniCalendar() {
   const date = state.miniCalDate;
   const year = date.getFullYear();
   const month = date.getMonth();
-
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
-
-  const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
+  const dayLabels = ['日','月','火','水','木','金','土'];
 
   let html = `
     <div class="mini-cal-header">
       <button class="btn btn-sm btn-outline-secondary py-0 px-1" id="mini-prev">‹</button>
-      <span class="mini-cal-title">${year}年 ${month + 1}月</span>
+      <span class="mini-cal-title">${year}年 ${month+1}月</span>
       <button class="btn btn-sm btn-outline-secondary py-0 px-1" id="mini-next">›</button>
     </div>
     <div class="mini-cal-grid">
       ${dayLabels.map(d => `<div class="mini-cal-day-label">${d}</div>`).join('')}
   `;
-
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
-
   for (let d = 1; d <= daysInMonth; d++) {
     const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
     html += `<div class="mini-cal-day${isToday ? ' today' : ''}" data-date="${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}">${d}</div>`;
   }
-
   html += '</div>';
   container.innerHTML = html;
 
   container.querySelectorAll('.mini-cal-day').forEach(el => {
-    el.addEventListener('click', () => {
-      state.calendar.gotoDate(el.dataset.date);
-    });
+    el.addEventListener('click', () => calMgr.gotoDate(new Date(el.dataset.date)));
   });
-
   document.getElementById('mini-prev').addEventListener('click', () => {
     state.miniCalDate = new Date(year, month - 1, 1);
     renderMiniCalendar();
@@ -659,25 +723,24 @@ function renderMiniCalendar() {
   });
 }
 
-// ── My calendar toggle ────────────────────────────────────────────────────────
-document.querySelector('#my-calendar-item .user-toggle').addEventListener('change', e => {
-  const src = state.calendar.getEventSourceById('mine');
-  if (!src) return;
-  if (e.target.checked) {
-    src.refetch();
-  } else {
-    state.calendar.getEvents()
-      .filter(ev => ev.extendedProps.isMine)
-      .forEach(ev => ev.remove());
-  }
-  document.getElementById('my-calendar-item').classList.toggle('inactive', !e.target.checked);
-});
-
 // ── Boot ──────────────────────────────────────────────────────────────────────
 async function boot() {
-  initCalendar();
   renderMiniCalendar();
+
+  // Add my own calendar column
+  calMgr.add(
+    { email: state.myEmail, name: '自分の予定', color: USER_COLORS[0] },
+    true
+  );
+
   await loadConfig();
+
+  // Update my column header with actual email once loaded
+  const myItem = calMgr.items.find(i => i.isMine);
+  if (myItem && state.myEmail) {
+    myItem.colEl.querySelector('.cal-col-name').textContent = state.myEmail;
+    myItem.name = state.myEmail;
+  }
 }
 
 boot();
