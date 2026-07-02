@@ -1,13 +1,17 @@
 const cardKeyGrid = document.getElementById('card-key-grid');
-const searchInput = document.getElementById('search-input');
 const loanForm = document.getElementById('loan-form');
 const loanCardKeySelect = document.getElementById('loan-card-key');
 const loanUserInput = document.getElementById('loan-user');
+const userDatalist = document.getElementById('user-datalist');
 const loanUseDateInput = document.getElementById('loan-use-date');
 const loanDueDateInput = document.getElementById('loan-due-date');
 const loanMessage = document.getElementById('loan-message');
 const historyCardKeySelect = document.getElementById('history-card-key');
 const historyBody = document.getElementById('history-body');
+const userForm = document.getElementById('user-form');
+const userNameInput = document.getElementById('user-name-input');
+const userMessage = document.getElementById('user-message');
+const userListEl = document.getElementById('user-list');
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -18,39 +22,12 @@ async function api(path, options) {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
+  if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(body.error || 'エラーが発生しました');
   }
   return body;
-}
-
-function renderCardKeys(cardKeys) {
-  cardKeyGrid.innerHTML = '';
-  cardKeys.forEach((k) => {
-    const div = document.createElement('div');
-    div.className = `card ${k.status === '在庫' ? 'status-available' : 'status-loaned'}`;
-
-    const detail = k.currentLoan
-      ? `<div class="card-detail">利用者: ${escapeHtml(k.currentLoan.user)}<br>利用日: ${k.currentLoan.useDate}<br>返却予定日: ${k.currentLoan.dueDate}</div>`
-      : '';
-
-    div.innerHTML = `
-      <div class="card-name">${escapeHtml(k.name)}</div>
-      <div class="card-status">${k.status}</div>
-      ${detail}
-    `;
-
-    if (k.currentLoan) {
-      const btn = document.createElement('button');
-      btn.className = 'return-btn secondary';
-      btn.textContent = '返却する';
-      btn.addEventListener('click', () => returnLoan(k.currentLoan.id));
-      div.appendChild(btn);
-    }
-
-    cardKeyGrid.appendChild(div);
-  });
 }
 
 function escapeHtml(str) {
@@ -59,9 +36,46 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-async function loadCardKeys(query) {
-  const path = query ? `/api/search?q=${encodeURIComponent(query)}` : '/api/card-keys';
-  const cardKeys = await api(path);
+function renderCardKeys(cardKeys) {
+  cardKeyGrid.innerHTML = '';
+  cardKeys.forEach((k) => {
+    const isAvailable = k.status === '在庫';
+    const div = document.createElement('div');
+    div.className = `card ${isAvailable ? 'status-available' : 'status-loaned'}`;
+
+    const line1 = k.currentLoan ? `利用者: ${escapeHtml(k.currentLoan.user)}` : '';
+    const line2 = k.currentLoan ? `利用日: ${k.currentLoan.useDate}` : '';
+    const line3 = k.currentLoan ? `返却予定日: ${k.currentLoan.dueDate}` : '';
+
+    div.innerHTML = `
+      <div class="card-name">${escapeHtml(k.name)}</div>
+      <div class="card-status">${isAvailable ? '' : k.status}</div>
+      <div class="card-detail">
+        <div>${line1 || '&nbsp;'}</div>
+        <div>${line2 || '&nbsp;'}</div>
+        <div>${line3 || '&nbsp;'}</div>
+      </div>
+      <div class="card-action"></div>
+    `;
+
+    const actionEl = div.querySelector('.card-action');
+    const btn = document.createElement('button');
+    btn.className = 'return-btn secondary';
+    btn.textContent = '返却する';
+    if (k.currentLoan) {
+      btn.addEventListener('click', () => returnLoan(k.currentLoan.id));
+    } else {
+      btn.disabled = true;
+      btn.style.visibility = 'hidden';
+    }
+    actionEl.appendChild(btn);
+
+    cardKeyGrid.appendChild(div);
+  });
+}
+
+async function loadCardKeys() {
+  const cardKeys = await api('/api/card-keys');
   renderCardKeys(cardKeys);
   return cardKeys;
 }
@@ -130,16 +144,45 @@ async function returnLoan(loanId) {
   }
 }
 
-async function refreshAll() {
-  const query = searchInput.value.trim();
-  await loadCardKeys(query);
-  await populateCardKeySelects();
-  await loadHistory();
+async function loadUsers() {
+  const users = await api('/api/users');
+
+  userDatalist.innerHTML = users
+    .map((u) => `<option value="${escapeHtml(u.name)}"></option>`)
+    .join('');
+
+  userListEl.innerHTML = '';
+  if (users.length === 0) {
+    userListEl.innerHTML = '<li class="user-list-empty">登録されている利用者はいません</li>';
+    return;
+  }
+  users.forEach((u) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${escapeHtml(u.name)}</span>`;
+    const btn = document.createElement('button');
+    btn.className = 'secondary';
+    btn.textContent = '削除';
+    btn.addEventListener('click', () => deleteUser(u.id));
+    li.appendChild(btn);
+    userListEl.appendChild(li);
+  });
 }
 
-searchInput.addEventListener('input', () => {
-  loadCardKeys(searchInput.value.trim());
-});
+async function deleteUser(id) {
+  try {
+    await api(`/api/users/${id}`, { method: 'DELETE' });
+    await loadUsers();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function refreshAll() {
+  await loadCardKeys();
+  await populateCardKeySelects();
+  await loadHistory();
+  await loadUsers();
+}
 
 historyCardKeySelect.addEventListener('change', loadHistory);
 
@@ -172,6 +215,24 @@ loanForm.addEventListener('submit', async (e) => {
   } catch (err) {
     loanMessage.textContent = err.message;
     loanMessage.classList.add('error');
+  }
+});
+
+userForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  userMessage.textContent = '';
+  userMessage.className = 'message';
+
+  try {
+    await api('/api/users', {
+      method: 'POST',
+      body: JSON.stringify({ name: userNameInput.value }),
+    });
+    userForm.reset();
+    await loadUsers();
+  } catch (err) {
+    userMessage.textContent = err.message;
+    userMessage.classList.add('error');
   }
 });
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { load, save } = require('./db');
+const { load, save, cardKeyName } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -21,7 +21,7 @@ function cardKeyWithStatus(data, cardKey) {
   const loan = currentLoanFor(data, cardKey.id);
   return {
     id: cardKey.id,
-    name: cardKey.name,
+    name: cardKeyName(cardKey.id),
     status: loan ? '貸出中' : '在庫',
     currentLoan: loan,
   };
@@ -30,19 +30,6 @@ function cardKeyWithStatus(data, cardKey) {
 app.get('/api/card-keys', (req, res) => {
   const data = load();
   res.json(data.cardKeys.map((k) => cardKeyWithStatus(data, k)));
-});
-
-app.get('/api/search', (req, res) => {
-  const q = String(req.query.q || '').trim().toLowerCase();
-  const data = load();
-  const results = data.cardKeys
-    .map((k) => cardKeyWithStatus(data, k))
-    .filter((k) => {
-      if (!q) return true;
-      const userMatch = k.currentLoan && k.currentLoan.user.toLowerCase().includes(q);
-      return k.name.toLowerCase().includes(q) || Boolean(userMatch);
-    });
-  res.json(results);
 });
 
 app.get('/api/card-keys/:id/history', (req, res) => {
@@ -113,6 +100,40 @@ app.put('/api/loans/:id/return', (req, res) => {
   loan.returnDate = returnDate;
   save(data);
   res.json(loan);
+});
+
+app.get('/api/users', (req, res) => {
+  const data = load();
+  res.json(data.users);
+});
+
+app.post('/api/users', (req, res) => {
+  const { name } = req.body || {};
+  const trimmed = String(name || '').trim();
+  if (!trimmed) {
+    return res.status(400).json({ error: '利用者名を入力してください' });
+  }
+
+  const data = load();
+  if (data.users.some((u) => u.name === trimmed)) {
+    return res.status(409).json({ error: 'この利用者はすでに登録されています' });
+  }
+
+  const user = { id: data.nextUserId++, name: trimmed };
+  data.users.push(user);
+  save(data);
+  res.status(201).json(user);
+});
+
+app.delete('/api/users/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const data = load();
+  const index = data.users.findIndex((u) => u.id === id);
+  if (index === -1) return res.status(404).json({ error: '利用者が見つかりません' });
+
+  data.users.splice(index, 1);
+  save(data);
+  res.status(204).end();
 });
 
 app.listen(PORT, () => {

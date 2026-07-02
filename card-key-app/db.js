@@ -3,15 +3,19 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const CARD_KEY_COUNT = 6;
+const CIRCLED_DIGITS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+
+function cardKeyName(id) {
+  return `カードキー${CIRCLED_DIGITS[id - 1] || id}`;
+}
 
 function defaultData() {
   return {
-    cardKeys: Array.from({ length: CARD_KEY_COUNT }, (_, i) => ({
-      id: i + 1,
-      name: `カードキー${i + 1}`,
-    })),
+    cardKeys: Array.from({ length: CARD_KEY_COUNT }, (_, i) => ({ id: i + 1 })),
     loans: [],
     nextLoanId: 1,
+    users: [],
+    nextUserId: 1,
   };
 }
 
@@ -22,7 +26,10 @@ function load() {
     return data;
   }
   const raw = fs.readFileSync(DB_PATH, 'utf-8');
-  return JSON.parse(raw);
+  const data = JSON.parse(raw);
+  if (!data.users) data.users = [];
+  if (!data.nextUserId) data.nextUserId = 1;
+  return data;
 }
 
 function save(data) {
@@ -30,4 +37,4 @@ function save(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-module.exports = { load, save };
+module.exports = { load, save, cardKeyName };
