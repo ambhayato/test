@@ -1,0 +1,13 @@
+{
+  "name": "card-key-app",
+  "version": "1.0.0",
+  "description": "会社カードキー(6枚)の貸出・返却・利用履歴を管理するアプリ",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

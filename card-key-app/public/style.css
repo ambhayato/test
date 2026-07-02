@@ -1,0 +1,193 @@
+:root {
+  --color-bg: #f4f6f8;
+  --color-panel: #ffffff;
+  --color-border: #dde2e7;
+  --color-text: #1f2933;
+  --color-muted: #6b7280;
+  --color-available: #1a7f37;
+  --color-available-bg: #e6f7ec;
+  --color-loaned: #b42318;
+  --color-loaned-bg: #fdecea;
+  --color-accent: #2563eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+header {
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border);
+  padding: 1rem 1.5rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.panel {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+
+#search-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.9rem;
+}
+
+.card.status-available {
+  background: var(--color-available-bg);
+  border-color: var(--color-available);
+}
+
+.card.status-loaned {
+  background: var(--color-loaned-bg);
+  border-color: var(--color-loaned);
+}
+
+.card .card-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+
+.card .card-status {
+  font-weight: 600;
+}
+
+.status-available .card-status {
+  color: var(--color-available);
+}
+
+.status-loaned .card-status {
+  color: var(--color-loaned);
+}
+
+.card .card-detail {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.card .return-btn {
+  margin-top: 0.6rem;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: flex-end;
+}
+
+.inline-form label,
+#history-card-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+label > select,
+.inline-form input {
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+button {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: var(--color-loaned);
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+.message {
+  min-height: 1.2rem;
+  font-size: 0.9rem;
+}
+
+.message.error {
+  color: var(--color-loaned);
+}
+
+.message.success {
+  color: var(--color-available);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.9rem;
+  font-size: 0.9rem;
+}
+
+.history-table th,
+.history-table td {
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  padding: 0.5rem 0.4rem;
+}
+
+.history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 640px) {
+  .inline-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
