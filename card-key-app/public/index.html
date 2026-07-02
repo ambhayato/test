@@ -12,14 +12,21 @@
   <h1>カードキー管理</h1>
 </header>
 
-<main>
-  <section class="panel">
-    <h2>カードキー一覧</h2>
-    <div id="card-key-grid" class="card-grid"></div>
-  </section>
+<div class="app-layout">
+  <nav class="sidebar">
+    <button class="nav-item" data-view="dashboard">カードキー一覧</button>
+    <button class="nav-item" data-view="users">利用者マスタ管理</button>
+    <button class="nav-item" data-view="loan">貸出登録</button>
+    <button class="nav-item" data-view="history">利用履歴</button>
+  </nav>
 
-  <div class="panel-row">
-    <section class="panel">
+  <main class="content">
+    <section id="view-dashboard" class="view panel">
+      <h2>カードキー一覧</h2>
+      <div id="card-key-grid" class="card-grid"></div>
+    </section>
+
+    <section id="view-users" class="view panel">
       <h2>利用者マスタ管理</h2>
       <form id="user-form" class="inline-form">
         <label>
@@ -32,7 +39,7 @@
       <ul id="user-list" class="user-list"></ul>
     </section>
 
-    <section class="panel">
+    <section id="view-loan" class="view panel">
       <h2>貸出登録</h2>
       <form id="loan-form" class="inline-form">
         <label>
@@ -56,29 +63,29 @@
       </form>
       <p id="loan-message" class="message"></p>
     </section>
-  </div>
 
-  <section class="panel">
-    <h2>利用履歴</h2>
-    <label>
-      カードキーを選択
-      <select id="history-card-key"></select>
-    </label>
-    <table class="history-table">
-      <thead>
-        <tr>
-          <th>利用者</th>
-          <th>利用日</th>
-          <th>返却予定日</th>
-          <th>返却日</th>
-          <th>状態</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="history-body"></tbody>
-    </table>
-  </section>
-</main>
+    <section id="view-history" class="view panel">
+      <h2>利用履歴</h2>
+      <label>
+        カードキーを選択
+        <select id="history-card-key"></select>
+      </label>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>利用者</th>
+            <th>利用日</th>
+            <th>返却予定日</th>
+            <th>返却日</th>
+            <th>状態</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </section>
+  </main>
+</div>
 
 <script src="app.js"></script>
 </body>

@@ -1,3 +1,5 @@
+const navItems = document.querySelectorAll('.nav-item');
+const views = document.querySelectorAll('.view');
 const cardKeyGrid = document.getElementById('card-key-grid');
 const loanForm = document.getElementById('loan-form');
 const loanCardKeySelect = document.getElementById('loan-card-key');
@@ -36,6 +38,20 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function switchView(viewName) {
+  views.forEach((v) => v.classList.toggle('active', v.id === `view-${viewName}`));
+  navItems.forEach((item) => item.classList.toggle('active', item.dataset.view === viewName));
+}
+
+function goToLoanForm(cardKeyId) {
+  switchView('loan');
+  loanCardKeySelect.value = String(cardKeyId);
+}
+
+navItems.forEach((item) => {
+  item.addEventListener('click', () => switchView(item.dataset.view));
+});
+
 function renderCardKeys(cardKeys) {
   cardKeyGrid.innerHTML = '';
   cardKeys.forEach((k) => {
@@ -60,13 +76,13 @@ function renderCardKeys(cardKeys) {
 
     const actionEl = div.querySelector('.card-action');
     const btn = document.createElement('button');
-    btn.className = 'return-btn secondary';
-    btn.textContent = '返却する';
     if (k.currentLoan) {
+      btn.className = 'secondary';
+      btn.textContent = '返却する';
       btn.addEventListener('click', () => returnLoan(k.currentLoan.id));
     } else {
-      btn.disabled = true;
-      btn.style.visibility = 'hidden';
+      btn.textContent = '貸出登録へ';
+      btn.addEventListener('click', () => goToLoanForm(k.id));
     }
     actionEl.appendChild(btn);
 
@@ -237,4 +253,5 @@ userForm.addEventListener('submit', async (e) => {
 });
 
 loanUseDateInput.value = todayStr();
+switchView('dashboard');
 refreshAll();
