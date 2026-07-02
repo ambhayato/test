@@ -1,14 +1,14 @@
 :root {
-  --color-bg: #f4f6f8;
+  --color-bg: #f3f7ff;
   --color-panel: #ffffff;
-  --color-border: #dde2e7;
+  --color-border: #e2e8f0;
   --color-text: #1f2933;
-  --color-muted: #6b7280;
-  --color-available: #1a7f37;
-  --color-available-bg: #e6f7ec;
-  --color-loaned: #b42318;
-  --color-loaned-bg: #fdecea;
-  --color-accent: #2563eb;
+  --color-muted: #64748b;
+  --color-available: #16a34a;
+  --color-available-bg: #dcfce7;
+  --color-loaned: #dc2626;
+  --color-loaned-bg: #fee2e2;
+  --color-accent: #3b82f6;
 }
 
 * {
@@ -43,7 +43,7 @@ header h1 {
 }
 
 .sidebar {
-  width: 150px;
+  width: max-content;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -64,6 +64,7 @@ header h1 {
   padding: 0.6rem 0.7rem;
   font-size: 0.85rem;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
