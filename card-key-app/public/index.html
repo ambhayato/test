@@ -18,43 +18,45 @@
     <div id="card-key-grid" class="card-grid"></div>
   </section>
 
-  <section class="panel">
-    <h2>貸出登録</h2>
-    <form id="loan-form" class="inline-form">
-      <label>
-        カードキー
-        <select id="loan-card-key" required></select>
-      </label>
-      <label>
-        利用者
-        <input id="loan-user" type="text" required placeholder="選択または入力" list="user-datalist" autocomplete="off" />
-        <datalist id="user-datalist"></datalist>
-      </label>
-      <label>
-        利用日
-        <input id="loan-use-date" type="date" required />
-      </label>
-      <label>
-        返却予定日
-        <input id="loan-due-date" type="date" required />
-      </label>
-      <button type="submit">貸出登録</button>
-    </form>
-    <p id="loan-message" class="message"></p>
-  </section>
+  <div class="panel-row">
+    <section class="panel">
+      <h2>利用者マスタ管理</h2>
+      <form id="user-form" class="inline-form">
+        <label>
+          利用者名
+          <input id="user-name-input" type="text" required placeholder="氏名" />
+        </label>
+        <button type="submit">追加</button>
+      </form>
+      <p id="user-message" class="message"></p>
+      <ul id="user-list" class="user-list"></ul>
+    </section>
 
-  <section class="panel">
-    <h2>利用者マスタ管理</h2>
-    <form id="user-form" class="inline-form">
-      <label>
-        利用者名
-        <input id="user-name-input" type="text" required placeholder="氏名" />
-      </label>
-      <button type="submit">追加</button>
-    </form>
-    <p id="user-message" class="message"></p>
-    <ul id="user-list" class="user-list"></ul>
-  </section>
+    <section class="panel">
+      <h2>貸出登録</h2>
+      <form id="loan-form" class="inline-form">
+        <label>
+          カードキー
+          <select id="loan-card-key" required></select>
+        </label>
+        <label>
+          利用者
+          <input id="loan-user" type="text" required placeholder="選択または入力" list="user-datalist" autocomplete="off" />
+          <datalist id="user-datalist"></datalist>
+        </label>
+        <label>
+          利用日
+          <input id="loan-use-date" type="date" required />
+        </label>
+        <label>
+          返却予定日
+          <input id="loan-due-date" type="date" required />
+        </label>
+        <button type="submit">貸出登録</button>
+      </form>
+      <p id="loan-message" class="message"></p>
+    </section>
+  </div>
 
   <section class="panel">
     <h2>利用履歴</h2>

@@ -34,7 +34,7 @@ header h1 {
 }
 
 main {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 1.5rem;
   display: flex;
@@ -47,6 +47,17 @@ main {
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 1.25rem;
+}
+
+.panel-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.panel-row .panel {
+  margin: 0;
 }
 
 .panel h2 {
@@ -221,6 +232,12 @@ button:hover {
 .user-list-empty {
   color: var(--color-muted);
   border-style: dashed;
+}
+
+@media (max-width: 800px) {
+  .panel-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
