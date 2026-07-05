@@ -1,0 +1,171 @@
+<h1>IPアドレス制限（基幹システムからのみアクセス許可）</h1>
+<p>基幹システムのサーバーからのみアクセスを許可し、他のクライアントはすべて拒否する設定です。
+IIS レベルでの制限と Azure レベルでの制限を組み合わせることで、多層防御を実現します。</p>
+
+<blockquote>
+  <p><strong>推奨構成:</strong> Azure NSG（ネットワークセキュリティグループ）+ IIS IP 制限の両方を設定してください。
+  Azure NSG でネットワーク境界を守り、IIS で追加のアプリケーション層フィルタリングを行います。</p>
+</blockquote>
+
+<h2>方式の選択</h2>
+<table>
+  <thead>
+    <tr><th>環境</th><th>推奨方式</th><th>設定場所</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Azure VM + IIS</td><td>Azure NSG + IIS IP 制限</td><td>Azure ポータル + web.config</td></tr>
+    <tr><td>Azure App Service</td><td>App Service アクセス制限</td><td>Azure ポータル（ネットワーク設定）</td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>方式①: IIS IP 制限（web.config）</h2>
+
+<h3>前提: 役割サービスのインストール</h3>
+<pre><code class="language-powershell"># IIS「IP とドメインの制限」機能をインストール
+Install-WindowsFeature -Name Web-IP-Security
+
+# インストール確認
+Get-WindowsFeature Web-IP-Security
+</code></pre>
+
+<h3>web.config の設定</h3>
+<p>サイトの <code>web.config</code> に以下を追加します。<code>allowUnlisted="false"</code> にすることで
+リストに登録されていない IP からのアクセスをすべて拒否します（ホワイトリスト方式）。</p>
+
+<pre><code class="language-xml">&lt;system.webServer&gt;
+  &lt;security&gt;
+    &lt;ipSecurity allowUnlisted="false" enableReverseDns="false"&gt;
+
+      &lt;!-- IIS サーバー自身からのアクセス（ヘルスチェック等） --&gt;
+      &lt;add ipAddress="127.0.0.1" allowed="true" /&gt;
+      &lt;add ipAddress="::1"       allowed="true" /&gt;
+
+      &lt;!-- 基幹システム: 単一 IP --&gt;
+      &lt;add ipAddress="192.168.1.100" allowed="true" /&gt;
+
+      &lt;!-- 基幹システム: サブネット指定（複数台・クラスタ構成の場合） --&gt;
+      &lt;!-- &lt;add ipAddress="192.168.1.0" subnetMask="255.255.255.0" allowed="true" /&gt; --&gt;
+
+    &lt;/ipSecurity&gt;
+  &lt;/security&gt;
+&lt;/system.webServer&gt;
+</code></pre>
+
+<h3>拒否された場合のレスポンス</h3>
+<p>デフォルトでは HTTP 403 (Forbidden) が返ります。
+拒否時のレスポンスコードを 404 に変えることで、サイトの存在を隠すことができます。</p>
+<pre><code class="language-xml">&lt;ipSecurity allowUnlisted="false" denyAction="NotFound"&gt;
+  &lt;!-- denyAction: Abort / Unauthorized / Forbidden / NotFound --&gt;
+  ...
+&lt;/ipSecurity&gt;
+</code></pre>
+
+<h3>設定確認（PowerShell）</h3>
+<pre><code class="language-powershell"># 現在の IP 制限設定を確認
+Get-WebConfigurationProperty `
+    -PSPath "IIS:\Sites\MySite" `
+    -Filter "system.webServer/security/ipSecurity" `
+    -Name "."
+
+# PowerShell で IP を追加する方法
+Add-WebConfigurationProperty `
+    -PSPath "IIS:\Sites\MySite" `
+    -Filter "system.webServer/security/ipSecurity" `
+    -Name "." `
+    -Value @{ ipAddress="192.168.1.100"; allowed="true" }
+</code></pre>
+
+<hr />
+
+<h2>方式②: Azure NSG（ネットワークセキュリティグループ）</h2>
+<p>Azure VM の場合、NSG でネットワークレベルの制限を設定します。
+IIS に到達する前にトラフィックをフィルタリングするため、より堅牢です。</p>
+
+<h3>Azure CLI で NSG 受信規則を追加</h3>
+<pre><code class="language-bash"># 既存の NSG に受信規則を追加
+# （既存の全許可ルールより優先度を低い数値＝高い優先度で設定）
+
+# 基幹システムからの HTTP/HTTPS を許可
+az network nsg rule create \
+  --resource-group myResourceGroup \
+  --nsg-name myNSG \
+  --name Allow-CoreSystem-HTTP \
+  --protocol Tcp \
+  --priority 100 \
+  --source-address-prefix 192.168.1.100/32 \
+  --source-port-range "*" \
+  --destination-address-prefix "*" \
+  --destination-port-ranges 80 443 \
+  --access Allow
+
+# その他すべてのインターネットからのアクセスを拒否
+az network nsg rule create \
+  --resource-group myResourceGroup \
+  --nsg-name myNSG \
+  --name Deny-All-Internet \
+  --protocol Tcp \
+  --priority 200 \
+  --source-address-prefix Internet \
+  --source-port-range "*" \
+  --destination-address-prefix "*" \
+  --destination-port-ranges 80 443 \
+  --access Deny
+</code></pre>
+
+<hr />
+
+<h2>方式③: Azure App Service アクセス制限</h2>
+<p>Azure App Service を使用している場合は、Azure ポータルまたは Azure CLI で
+アクセス制限を設定します（IIS の <code>&lt;ipSecurity&gt;</code> は App Service では機能しません）。</p>
+
+<h3>Azure CLI でアクセス制限を設定</h3>
+<pre><code class="language-bash"># 基幹システムの IP からのみアクセスを許可
+az webapp config access-restriction add \
+  --resource-group myResourceGroup \
+  --name myWebApp \
+  --rule-name Allow-CoreSystem \
+  --action Allow \
+  --ip-address 192.168.1.100/32 \
+  --priority 100
+
+# 現在の設定を確認
+az webapp config access-restriction show \
+  --resource-group myResourceGroup \
+  --name myWebApp
+</code></pre>
+
+<h3>Azure ポータルでの設定手順</h3>
+<ol>
+  <li>Azure ポータルで App Service を開く</li>
+  <li>[設定] → [ネットワーク] → [受信トラフィック] → [アクセス制限] をクリック</li>
+  <li>[規則の追加] をクリック</li>
+  <li>名前・優先度・アクション（許可）・ソース（IP アドレス）・IP アドレス範囲を入力</li>
+  <li>[規則の追加] で保存</li>
+</ol>
+
+<hr />
+
+<h2>設定後の動作確認</h2>
+<pre><code class="language-powershell"># 基幹システムのサーバーから疎通確認
+# （基幹システムのサーバーで実行）
+Invoke-WebRequest -Uri "https://your-manual-site.example.com" -UseBasicParsing
+
+# 想定外のIPからアクセスされた場合: 403 または 404 が返る
+# PowerShell での確認
+try {
+    Invoke-WebRequest -Uri "https://your-manual-site.example.com"
+} catch {
+    Write-Host "Status: $($_.Exception.Response.StatusCode)"
+    # → 403 Forbidden または 404 Not Found
+}
+</code></pre>
+
+<h2>注意事項</h2>
+<ul>
+  <li>基幹システムが NAT やロードバランサーを経由している場合は、実際にリクエストを送信する出口 IP を許可する必要があります</li>
+  <li>Azure 内部通信（同一 VNet 内）の場合はプライベート IP アドレスを使用します</li>
+  <li>Azure Application Gateway を経由する場合は、Application Gateway の IP を許可します</li>
+  <li>設定変更後はブラウザのキャッシュをクリアして動作確認してください</li>
+</ul>

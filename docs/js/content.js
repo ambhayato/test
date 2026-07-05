@@ -30,9 +30,10 @@ const MANUAL_CONTENT = [
   { id: 'config-webconfig',    title: 'web.config の基本',     section: 'config',   sectionLabel: 'IIS 基本設定',           order: 3 },
 
   /* セキュリティ設定 */
-  { id: 'security-ssl',        title: 'SSL/TLS 設定',          section: 'security', sectionLabel: 'セキュリティ設定',       order: 1 },
-  { id: 'security-auth',       title: '認証設定',              section: 'security', sectionLabel: 'セキュリティ設定',       order: 2 },
-  { id: 'security-headers',    title: 'セキュリティヘッダー',  section: 'security', sectionLabel: 'セキュリティ設定',       order: 3 },
+  { id: 'security-ip-restriction', title: 'IPアドレス制限',       section: 'security', sectionLabel: 'セキュリティ設定',       order: 1 },
+  { id: 'security-ssl',            title: 'SSL/TLS 設定',          section: 'security', sectionLabel: 'セキュリティ設定',       order: 2 },
+  { id: 'security-auth',           title: '認証設定',              section: 'security', sectionLabel: 'セキュリティ設定',       order: 3 },
+  { id: 'security-headers',        title: 'セキュリティヘッダー',  section: 'security', sectionLabel: 'セキュリティ設定',       order: 4 },
 
   /* Azure デプロイ */
   { id: 'azure-appservice',    title: 'Azure App Service',     section: 'azure',    sectionLabel: 'Azure デプロイ',         order: 1 },
