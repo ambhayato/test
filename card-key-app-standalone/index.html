@@ -1,0 +1,980 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>カードキー管理(共有ファイル版)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2213%22 font-size=%2213%22>🔑</text></svg>" />
+<style>
+:root {
+  --color-bg: #f3f7ff;
+  --color-panel: #ffffff;
+  --color-border: #e2e8f0;
+  --color-text: #1f2933;
+  --color-muted: #64748b;
+  --color-available: #16a34a;
+  --color-available-bg: #dcfce7;
+  --color-loaned: #dc2626;
+  --color-loaned-bg: #fee2e2;
+  --color-accent: #3b82f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+header {
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+#connection-status {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+#connection-status button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.banner {
+  max-width: 640px;
+  margin: 2rem auto;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+
+.banner h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.banner p {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.banner .actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.banner .warning {
+  background: var(--color-loaned-bg);
+  border: 1px solid var(--color-loaned);
+  color: var(--color-loaned);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+}
+
+.app-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.sidebar {
+  width: max-content;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.6rem;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.nav-item {
+  background: transparent;
+  color: var(--color-text);
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.85rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--color-bg);
+}
+
+.nav-item.active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.view {
+  display: none;
+}
+
+.view.active {
+  display: block;
+}
+
+.panel {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.9rem;
+}
+
+.card.status-available {
+  background: var(--color-available-bg);
+  border-color: var(--color-available);
+}
+
+.card.status-loaned {
+  background: var(--color-loaned-bg);
+  border-color: var(--color-loaned);
+}
+
+.card .card-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+
+.card .card-status {
+  font-weight: 600;
+  min-height: 1.3rem;
+}
+
+.status-available .card-status {
+  color: var(--color-available);
+}
+
+.status-loaned .card-status {
+  color: var(--color-loaned);
+}
+
+.card .card-detail {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.card .card-detail div {
+  min-height: 1.3em;
+}
+
+.card .card-action {
+  margin-top: 0.6rem;
+  min-height: 2.3rem;
+  display: flex;
+  align-items: center;
+}
+
+.card .card-action button {
+  width: 100%;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: flex-end;
+}
+
+.inline-form label,
+#history-card-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+label > select,
+.inline-form input {
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+button {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: var(--color-loaned);
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+.message {
+  min-height: 1.2rem;
+  font-size: 0.9rem;
+}
+
+.message.error {
+  color: var(--color-loaned);
+}
+
+.message.success {
+  color: var(--color-available);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.9rem;
+  font-size: 0.9rem;
+}
+
+.history-table th,
+.history-table td {
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  padding: 0.5rem 0.4rem;
+}
+
+.history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.user-list {
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.user-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.user-list li button {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.user-list-empty {
+  color: var(--color-muted);
+  border-style: dashed;
+}
+
+@media (max-width: 700px) {
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .inline-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>カードキー管理</h1>
+  <div id="connection-status"></div>
+</header>
+
+<div id="banner-area"></div>
+
+<div id="app-layout" class="app-layout" style="display: none;">
+  <nav class="sidebar">
+    <button class="nav-item" data-view="dashboard">カードキー一覧</button>
+    <button class="nav-item" data-view="users">利用者マスタ管理</button>
+    <button class="nav-item" data-view="loan">貸出登録</button>
+    <button class="nav-item" data-view="history">利用履歴</button>
+  </nav>
+
+  <main class="content">
+    <section id="view-dashboard" class="view panel">
+      <h2>カードキー一覧</h2>
+      <div id="card-key-grid" class="card-grid"></div>
+    </section>
+
+    <section id="view-users" class="view panel">
+      <h2>利用者マスタ管理</h2>
+      <form id="user-form" class="inline-form">
+        <label>
+          利用者名
+          <input id="user-name-input" type="text" required placeholder="氏名" />
+        </label>
+        <button type="submit">追加</button>
+      </form>
+      <p id="user-message" class="message"></p>
+      <ul id="user-list" class="user-list"></ul>
+    </section>
+
+    <section id="view-loan" class="view panel">
+      <h2>貸出登録</h2>
+      <form id="loan-form" class="inline-form">
+        <label>
+          カードキー
+          <select id="loan-card-key" required></select>
+        </label>
+        <label>
+          利用者
+          <input id="loan-user" type="text" required placeholder="選択または入力" list="user-datalist" autocomplete="off" />
+          <datalist id="user-datalist"></datalist>
+        </label>
+        <label>
+          利用日
+          <input id="loan-use-date" type="date" required />
+        </label>
+        <label>
+          返却予定日
+          <input id="loan-due-date" type="date" required />
+        </label>
+        <button type="submit">貸出登録</button>
+      </form>
+      <p id="loan-message" class="message"></p>
+    </section>
+
+    <section id="view-history" class="view panel">
+      <h2>利用履歴</h2>
+      <label>
+        カードキーを選択
+        <select id="history-card-key"></select>
+      </label>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>利用者</th>
+            <th>利用日</th>
+            <th>返却予定日</th>
+            <th>返却日</th>
+            <th>状態</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<script>
+const CIRCLED_DIGITS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+function cardKeyName(id) {
+  return `カードキー${CIRCLED_DIGITS[id - 1] || id}`;
+}
+
+function defaultState() {
+  return {
+    cardKeys: Array.from({ length: 6 }, (_, i) => ({ id: i + 1 })),
+    loans: [],
+    nextLoanId: 1,
+    users: [],
+    nextUserId: 1,
+  };
+}
+
+let fileHandle = null;
+let state = null;
+const AUTO_REFRESH_MS = 20000;
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('card-key-app-standalone', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbSet(key, value) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function supportsFileSystemAccess() {
+  return 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// ---- Connection banners ----
+
+const bannerArea = document.getElementById('banner-area');
+const appLayout = document.getElementById('app-layout');
+const connectionStatus = document.getElementById('connection-status');
+
+function renderUnsupportedBanner() {
+  bannerArea.innerHTML = `
+    <div class="banner">
+      <h2>このブラウザは非対応です</h2>
+      <div class="warning">共有ファイルの読み書きには Google Chrome または Microsoft Edge が必要です。</div>
+    </div>
+  `;
+}
+
+function renderConnectBanner() {
+  bannerArea.innerHTML = `
+    <div class="banner">
+      <h2>共有データファイルに接続してください</h2>
+      <p>
+        カードキーの貸出・返却データを保存する共有ファイル(JSON)に接続します。<br>
+        すでに社内の共有ネットワークドライブにデータファイルがある場合は「既存のファイルを開く」、
+        まだ無い場合は「新規作成」で共有フォルダ内に作成してください。<br>
+        以後このブラウザでは自動的に再接続を試みます。
+      </p>
+      <div class="actions">
+        <button id="btn-open-file">既存のファイルを開く</button>
+        <button id="btn-create-file" class="ghost">新規作成</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-open-file').addEventListener('click', openFile);
+  document.getElementById('btn-create-file').addEventListener('click', createFile);
+}
+
+function renderReconnectBanner(handleName) {
+  bannerArea.innerHTML = `
+    <div class="banner">
+      <h2>前回接続したファイルに再接続</h2>
+      <p>前回接続していたファイル「${escapeHtml(handleName)}」への再接続を確認してください。</p>
+      <div class="actions">
+        <button id="btn-reconnect">再接続する</button>
+        <button id="btn-open-file" class="ghost">別のファイルを開く</button>
+        <button id="btn-create-file" class="ghost">新規作成</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-reconnect').addEventListener('click', reconnect);
+  document.getElementById('btn-open-file').addEventListener('click', openFile);
+  document.getElementById('btn-create-file').addEventListener('click', createFile);
+}
+
+function renderConnectedStatus() {
+  connectionStatus.innerHTML = `
+    <span>接続中: ${escapeHtml(fileHandle.name)}</span>
+    <button id="btn-refresh" class="ghost">更新</button>
+    <button id="btn-disconnect" class="ghost">切断</button>
+  `;
+  document.getElementById('btn-refresh').addEventListener('click', () => reloadAndRender());
+  document.getElementById('btn-disconnect').addEventListener('click', disconnect);
+}
+
+async function disconnect() {
+  fileHandle = null;
+  state = null;
+  await idbSet('dataFileHandle', null);
+  connectionStatus.innerHTML = '';
+  appLayout.style.display = 'none';
+  renderConnectBanner();
+}
+
+// ---- File connection ----
+
+async function openFile() {
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'カードキーデータ', accept: { 'application/json': ['.json'] } }],
+    });
+    fileHandle = handle;
+    await idbSet('dataFileHandle', handle);
+    await loadFromFile();
+  } catch (err) {
+    if (err.name !== 'AbortError') alert('ファイルを開けませんでした: ' + err.message);
+  }
+}
+
+async function createFile() {
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: 'card-key-data.json',
+      types: [{ description: 'カードキーデータ', accept: { 'application/json': ['.json'] } }],
+    });
+    fileHandle = handle;
+    state = defaultState();
+    await writeFile();
+    await idbSet('dataFileHandle', handle);
+    onConnected();
+  } catch (err) {
+    if (err.name !== 'AbortError') alert('ファイルを作成できませんでした: ' + err.message);
+  }
+}
+
+async function reconnect() {
+  try {
+    const perm = await fileHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      alert('アクセスが許可されませんでした。');
+      return;
+    }
+    await loadFromFile();
+  } catch (err) {
+    alert('再接続に失敗しました: ' + err.message);
+  }
+}
+
+async function loadFromFile() {
+  const file = await fileHandle.getFile();
+  const text = await file.text();
+  try {
+    state = text.trim() ? JSON.parse(text) : defaultState();
+  } catch (err) {
+    alert('データファイルの読み込みに失敗しました。ファイルが壊れている可能性があります。');
+    throw err;
+  }
+  if (!state.cardKeys || state.cardKeys.length === 0) state.cardKeys = defaultState().cardKeys;
+  if (!state.loans) state.loans = [];
+  if (!state.users) state.users = [];
+  if (!state.nextLoanId) state.nextLoanId = 1;
+  if (!state.nextUserId) state.nextUserId = 1;
+  onConnected();
+}
+
+async function reloadAndRender() {
+  if (!fileHandle) return;
+  const perm = await fileHandle.queryPermission({ mode: 'readwrite' });
+  if (perm !== 'granted') {
+    renderReconnectBanner(fileHandle.name);
+    appLayout.style.display = 'none';
+    connectionStatus.innerHTML = '';
+    return;
+  }
+  await loadFromFile();
+}
+
+async function writeFile() {
+  if (!fileHandle) return;
+  const writable = await fileHandle.createWritable();
+  await writable.write(JSON.stringify(state, null, 2));
+  await writable.close();
+}
+
+function onConnected() {
+  bannerArea.innerHTML = '';
+  appLayout.style.display = 'flex';
+  renderConnectedStatus();
+  renderAll();
+}
+
+// ---- View switching ----
+
+const navItems = document.querySelectorAll('.nav-item');
+const views = document.querySelectorAll('.view');
+
+function switchView(viewName) {
+  views.forEach((v) => v.classList.toggle('active', v.id === `view-${viewName}`));
+  navItems.forEach((item) => item.classList.toggle('active', item.dataset.view === viewName));
+}
+
+navItems.forEach((item) => {
+  item.addEventListener('click', async () => {
+    await reloadAndRender();
+    switchView(item.dataset.view);
+  });
+});
+
+function goToLoanForm(cardKeyId) {
+  switchView('loan');
+  loanCardKeySelect.value = String(cardKeyId);
+}
+
+// ---- Rendering ----
+
+const cardKeyGrid = document.getElementById('card-key-grid');
+const loanForm = document.getElementById('loan-form');
+const loanCardKeySelect = document.getElementById('loan-card-key');
+const loanUserInput = document.getElementById('loan-user');
+const userDatalist = document.getElementById('user-datalist');
+const loanUseDateInput = document.getElementById('loan-use-date');
+const loanDueDateInput = document.getElementById('loan-due-date');
+const loanMessage = document.getElementById('loan-message');
+const historyCardKeySelect = document.getElementById('history-card-key');
+const historyBody = document.getElementById('history-body');
+const userForm = document.getElementById('user-form');
+const userNameInput = document.getElementById('user-name-input');
+const userMessage = document.getElementById('user-message');
+const userListEl = document.getElementById('user-list');
+
+function currentLoanFor(cardKeyId) {
+  return state.loans.find((l) => l.cardKeyId === cardKeyId && !l.returnDate) || null;
+}
+
+function cardKeyWithStatus(cardKey) {
+  const loan = currentLoanFor(cardKey.id);
+  return {
+    id: cardKey.id,
+    name: cardKeyName(cardKey.id),
+    status: loan ? '貸出中' : '在庫',
+    currentLoan: loan,
+  };
+}
+
+function renderDashboard() {
+  const cardKeys = state.cardKeys.map(cardKeyWithStatus);
+  cardKeyGrid.innerHTML = '';
+  cardKeys.forEach((k) => {
+    const isAvailable = k.status === '在庫';
+    const div = document.createElement('div');
+    div.className = `card ${isAvailable ? 'status-available' : 'status-loaned'}`;
+
+    const line1 = k.currentLoan ? `利用者: ${escapeHtml(k.currentLoan.user)}` : '';
+    const line2 = k.currentLoan ? `利用日: ${k.currentLoan.useDate}` : '';
+    const line3 = k.currentLoan ? `返却予定日: ${k.currentLoan.dueDate}` : '';
+
+    div.innerHTML = `
+      <div class="card-name">${escapeHtml(k.name)}</div>
+      <div class="card-status">${isAvailable ? '' : k.status}</div>
+      <div class="card-detail">
+        <div>${line1 || '&nbsp;'}</div>
+        <div>${line2 || '&nbsp;'}</div>
+        <div>${line3 || '&nbsp;'}</div>
+      </div>
+      <div class="card-action"></div>
+    `;
+
+    const actionEl = div.querySelector('.card-action');
+    const btn = document.createElement('button');
+    if (k.currentLoan) {
+      btn.className = 'secondary';
+      btn.textContent = '返却する';
+      btn.addEventListener('click', () => returnLoan(k.currentLoan.id));
+    } else {
+      btn.textContent = '貸出登録へ';
+      btn.addEventListener('click', () => goToLoanForm(k.id));
+    }
+    actionEl.appendChild(btn);
+
+    cardKeyGrid.appendChild(div);
+  });
+}
+
+function populateSelectsAndDatalist() {
+  const cardKeys = state.cardKeys.map(cardKeyWithStatus);
+
+  loanCardKeySelect.innerHTML = cardKeys
+    .filter((k) => k.status === '在庫')
+    .map((k) => `<option value="${k.id}">${escapeHtml(k.name)}</option>`)
+    .join('') || '<option value="">貸出可能なカードキーがありません</option>';
+
+  const currentHistorySelection = historyCardKeySelect.value;
+  historyCardKeySelect.innerHTML = cardKeys
+    .map((k) => `<option value="${k.id}">${escapeHtml(k.name)}</option>`)
+    .join('');
+  if (currentHistorySelection) historyCardKeySelect.value = currentHistorySelection;
+
+  userDatalist.innerHTML = state.users
+    .map((u) => `<option value="${escapeHtml(u.name)}"></option>`)
+    .join('');
+}
+
+function renderHistory() {
+  const id = historyCardKeySelect.value;
+  if (!id) {
+    historyBody.innerHTML = '';
+    return;
+  }
+  const history = state.loans
+    .filter((l) => l.cardKeyId === Number(id))
+    .sort((a, b) => b.useDate.localeCompare(a.useDate) || b.id - a.id);
+
+  historyBody.innerHTML = '';
+  if (history.length === 0) {
+    historyBody.innerHTML = '<tr><td colspan="6">利用履歴はありません</td></tr>';
+    return;
+  }
+
+  history.forEach((loan) => {
+    const tr = document.createElement('tr');
+    const status = loan.returnDate ? '返却済み' : '貸出中';
+    tr.innerHTML = `
+      <td>${escapeHtml(loan.user)}</td>
+      <td>${loan.useDate}</td>
+      <td>${loan.dueDate}</td>
+      <td>${loan.returnDate || '-'}</td>
+      <td>${status}</td>
+      <td></td>
+    `;
+    if (!loan.returnDate) {
+      const btn = document.createElement('button');
+      btn.textContent = '返却する';
+      btn.addEventListener('click', () => returnLoan(loan.id));
+      tr.lastElementChild.appendChild(btn);
+    }
+    historyBody.appendChild(tr);
+  });
+}
+
+function renderUserMasterList() {
+  userListEl.innerHTML = '';
+  if (state.users.length === 0) {
+    userListEl.innerHTML = '<li class="user-list-empty">登録されている利用者はいません</li>';
+    return;
+  }
+  state.users.forEach((u) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${escapeHtml(u.name)}</span>`;
+    const btn = document.createElement('button');
+    btn.className = 'secondary';
+    btn.textContent = '削除';
+    btn.addEventListener('click', () => deleteUser(u.id));
+    li.appendChild(btn);
+    userListEl.appendChild(li);
+  });
+}
+
+function renderAll() {
+  renderDashboard();
+  populateSelectsAndDatalist();
+  renderHistory();
+  renderUserMasterList();
+}
+
+// ---- Mutations ----
+
+async function returnLoan(loanId) {
+  await reloadAndRender();
+  const loan = state.loans.find((l) => l.id === loanId);
+  if (!loan) {
+    alert('貸出記録が見つかりません(他の人が既に処理した可能性があります)');
+    await reloadAndRender();
+    return;
+  }
+  if (loan.returnDate) {
+    alert('すでに返却済みです');
+    await reloadAndRender();
+    return;
+  }
+  loan.returnDate = todayStr();
+  await writeFile();
+  renderAll();
+}
+
+async function deleteUser(id) {
+  await reloadAndRender();
+  state.users = state.users.filter((u) => u.id !== id);
+  await writeFile();
+  renderAll();
+}
+
+loanForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  loanMessage.textContent = '';
+  loanMessage.className = 'message';
+
+  const cardKeyId = Number(loanCardKeySelect.value);
+  const user = loanUserInput.value.trim();
+  const useDate = loanUseDateInput.value;
+  const dueDate = loanDueDateInput.value;
+
+  if (!cardKeyId) {
+    loanMessage.textContent = '貸出可能なカードキーがありません';
+    loanMessage.classList.add('error');
+    return;
+  }
+  if (!user) {
+    loanMessage.textContent = '利用者を入力してください';
+    loanMessage.classList.add('error');
+    return;
+  }
+  if (dueDate < useDate) {
+    loanMessage.textContent = '返却予定日は利用日より後の日付にしてください';
+    loanMessage.classList.add('error');
+    return;
+  }
+
+  await reloadAndRender();
+
+  if (currentLoanFor(cardKeyId)) {
+    loanMessage.textContent = 'このカードキーは他の人によって既に貸出登録されています';
+    loanMessage.classList.add('error');
+    renderAll();
+    return;
+  }
+
+  state.loans.push({
+    id: state.nextLoanId++,
+    cardKeyId,
+    user,
+    useDate,
+    dueDate,
+    returnDate: null,
+  });
+  await writeFile();
+
+  loanMessage.textContent = '貸出登録しました';
+  loanMessage.classList.add('success');
+  loanForm.reset();
+  loanUseDateInput.value = todayStr();
+  renderAll();
+});
+
+userForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  userMessage.textContent = '';
+  userMessage.className = 'message';
+
+  const name = userNameInput.value.trim();
+  if (!name) return;
+
+  await reloadAndRender();
+
+  if (state.users.some((u) => u.name === name)) {
+    userMessage.textContent = 'この利用者はすでに登録されています';
+    userMessage.classList.add('error');
+    renderAll();
+    return;
+  }
+
+  state.users.push({ id: state.nextUserId++, name });
+  await writeFile();
+  userForm.reset();
+  renderAll();
+});
+
+historyCardKeySelect.addEventListener('change', renderHistory);
+
+// ---- Startup ----
+
+async function init() {
+  loanUseDateInput.value = todayStr();
+  switchView('dashboard');
+
+  if (!supportsFileSystemAccess()) {
+    renderUnsupportedBanner();
+    return;
+  }
+
+  const savedHandle = await idbGet('dataFileHandle').catch(() => null);
+  if (!savedHandle) {
+    renderConnectBanner();
+    return;
+  }
+
+  fileHandle = savedHandle;
+  const perm = await fileHandle.queryPermission({ mode: 'readwrite' });
+  if (perm === 'granted') {
+    await loadFromFile();
+  } else {
+    renderReconnectBanner(fileHandle.name);
+  }
+}
+
+init();
+
+setInterval(() => {
+  if (fileHandle && !document.hidden) reloadAndRender();
+}, AUTO_REFRESH_MS);
+</script>
+</body>
+</html>
