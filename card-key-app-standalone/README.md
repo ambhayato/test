@@ -37,6 +37,37 @@
 - **リアルタイム反映ではない**: 他の人の変更は自動更新(20秒ごと)または画面切り替え時・「更新」ボタンで反映されます。今まさに誰かが操作した直後の状態が即座に見えるわけではありません。
 - **接続の切れ直し**: OSやブラウザの再起動後など、ファイルへのアクセス許可が切れることがあります。その場合は「再接続する」ボタンで許可し直してください。
 
+## Teams / SharePointへの公開(GitHub Pages経由)
+
+HTMLファイルをTeams/SharePointにそのままアップロードすると、多くの場合クリックしてもダウンロードされるだけで
+アプリとしては開けません(SharePointがHTML内のスクリプト実行を防ぐための仕様のため)。
+そこで、このフォルダを **GitHub Pages** で公開し、そのURLをTeamsの「Webサイト」タブに登録する方法を用意しています
+(`.github/workflows/deploy-pages.yml` で自動デプロイされます)。
+
+### 1. GitHub Pagesを有効化する(リポジトリの管理者が1回だけ行う)
+
+1. GitHubのリポジトリ画面で **Settings → Pages** を開く
+2. 「Build and deployment」の **Source** を **GitHub Actions** に設定する
+
+これで、`card-key-app-standalone/` 配下に変更をpushするたびに自動でPagesへデプロイされます
+(`.github/workflows/deploy-pages.yml` が実行されます)。手動で今すぐデプロイしたい場合は、
+GitHubの **Actions** タブから `Deploy card-key-app-standalone to GitHub Pages` を選び、
+「Run workflow」で手動実行することもできます。
+
+### 2. 公開されたURLを確認する
+
+デプロイが完了すると、GitHubの **Settings → Pages** 画面、または該当ワークフローの実行結果に
+公開URL(例: `https://<組織名またはユーザー名>.github.io/<リポジトリ名>/`)が表示されます。
+
+### 3. TeamsのWebサイトタブに追加する
+
+1. 追加したいチーム(チャネル)を開く
+2. タブ一覧の「+」→「Webサイト」を選択
+3. 2で確認したURLを入力し、タブ名(例:「カードキー管理」)を付けて保存
+
+これで、チームのメンバーはTeamsのタブを開くだけでこのアプリにアクセスできます。
+データの共有・接続方法は上記の「使い方」の手順と同じです(各自のブラウザで共有ドライブ上のデータファイルに接続します)。
+
 ## Node.js版(card-key-app)との違い
 
 このリポジトリには、常時起動するサーバーを使う `card-key-app`(Node.js版)もあります。
