@@ -155,6 +155,7 @@ async function returnLoan(loanId) {
       body: JSON.stringify({ returnDate: todayStr() }),
     });
     await refreshAll();
+    switchView('dashboard');
   } catch (err) {
     alert(err.message);
   }
